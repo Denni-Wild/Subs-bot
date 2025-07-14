@@ -1,0 +1,3 @@
+python-telegram-bot
+youtube-transcript-api
+python-dotenv 
