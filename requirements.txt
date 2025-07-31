@@ -1,3 +1,17 @@
 python-telegram-bot
 youtube-transcript-api
-python-dotenv 
+python-dotenv
+requests
+asyncio
+
+# Voice message transcription dependencies
+websockets
+pydub
+ffmpeg-python
+
+# Testing dependencies
+pytest
+pytest-asyncio
+pytest-mock
+responses
+aioresponses 

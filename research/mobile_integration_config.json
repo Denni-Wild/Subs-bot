@@ -1,0 +1,114 @@
+{
+  "obsidian": {
+    "enabled": true,
+    "vault_path": "D:/ObsidianVault",
+    "sync_interval": 300,
+    "auto_sync": true,
+    "folders": {
+      "tasks": "Tasks",
+      "calendar": "Calendar",
+      "notes": "Notes",
+      "daily": "Daily"
+    },
+    "templates": {
+      "task": "templates/task.md",
+      "daily": "templates/daily.md",
+      "meeting": "templates/meeting.md"
+    }
+  },
+  "mobile": {
+    "enabled": true,
+    "web_interface": {
+      "enabled": true,
+      "port": 8080,
+      "host": "0.0.0.0",
+      "ssl": false
+    },
+    "api": {
+      "enabled": true,
+      "rate_limit": 100,
+      "cors": true
+    },
+    "database": {
+      "path": "mobile_tasks.db",
+      "backup_interval": 3600
+    }
+  },
+  "sync_options": {
+    "cloud_storage": {
+      "enabled": false,
+      "type": "dropbox",
+      "api_key": "",
+      "folder": "/Tasks"
+    },
+    "calendar_sync": {
+      "enabled": true,
+      "google_calendar": {
+        "enabled": false,
+        "credentials_file": "",
+        "calendar_id": ""
+      },
+      "outlook": {
+        "enabled": false,
+        "client_id": "",
+        "client_secret": ""
+      }
+    },
+    "notification_channels": {
+      "telegram": {
+        "enabled": true,
+        "bot_token": "",
+        "chat_id": ""
+      },
+      "email": {
+        "enabled": false,
+        "smtp_server": "",
+        "smtp_port": 587,
+        "username": "",
+        "password": ""
+      },
+      "push": {
+        "enabled": false,
+        "firebase_key": ""
+      }
+    }
+  },
+  "integrations": {
+    "notion": {
+      "enabled": false,
+      "api_key": "",
+      "database_id": ""
+    },
+    "trello": {
+      "enabled": false,
+      "api_key": "",
+      "token": "",
+      "board_id": ""
+    },
+    "jira": {
+      "enabled": false,
+      "url": "",
+      "username": "",
+      "api_token": ""
+    },
+    "slack": {
+      "enabled": false,
+      "webhook_url": "",
+      "channel": ""
+    }
+  },
+  "features": {
+    "offline_mode": true,
+    "auto_backup": true,
+    "conflict_resolution": "latest_wins",
+    "data_encryption": false,
+    "compression": true
+  },
+  "ui": {
+    "theme": "auto",
+    "language": "ru",
+    "timezone": "Europe/Moscow",
+    "date_format": "DD.MM.YYYY",
+    "time_format": "24"
+  }
+} 

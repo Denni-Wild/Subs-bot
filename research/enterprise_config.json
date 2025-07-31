@@ -1,0 +1,188 @@
+{
+  "servers": {
+    "deltatask": {
+      "enabled": true,
+      "priority": 1,
+      "timeout": 30,
+      "retry_attempts": 3
+    },
+    "shrimp_task_manager": {
+      "enabled": true,
+      "priority": 1,
+      "timeout": 60,
+      "retry_attempts": 3
+    },
+    "hpkv_memory": {
+      "enabled": true,
+      "priority": 2,
+      "timeout": 30,
+      "retry_attempts": 2
+    },
+    "memory": {
+      "enabled": true,
+      "priority": 2,
+      "timeout": 30,
+      "retry_attempts": 2
+    },
+    "calendar": {
+      "enabled": true,
+      "priority": 3,
+      "timeout": 20,
+      "retry_attempts": 2
+    },
+    "notifications": {
+      "enabled": true,
+      "priority": 3,
+      "timeout": 15,
+      "retry_attempts": 2
+    },
+    "time_tracker": {
+      "enabled": true,
+      "priority": 3,
+      "timeout": 20,
+      "retry_attempts": 2
+    },
+    "git": {
+      "enabled": true,
+      "priority": 4,
+      "timeout": 30,
+      "retry_attempts": 2
+    },
+    "filesystem": {
+      "enabled": true,
+      "priority": 4,
+      "timeout": 25,
+      "retry_attempts": 2
+    },
+    "backup": {
+      "enabled": true,
+      "priority": 5,
+      "timeout": 120,
+      "retry_attempts": 1
+    }
+  },
+  "sync_interval": 300,
+  "health_check_interval": 60,
+  "backup_interval": 3600,
+  "max_retries": 3,
+  "circuit_breaker_threshold": 5,
+  "circuit_breaker_timeout": 60,
+  "monitoring_enabled": true,
+  "logging_level": "INFO",
+  "log_rotation": {
+    "max_size_mb": 10,
+    "backup_count": 5
+  },
+  "data_dirs": {
+    "calendar": "D:/PY/MCP/calendar-data",
+    "notifications": "D:/PY/MCP/notifications-data",
+    "time_tracking": "D:/PY/MCP/time-tracking-data",
+    "backup": "D:/PY/MCP/backup-data",
+    "logs": "logs"
+  },
+  "notifications": {
+    "email": {
+      "enabled": false,
+      "smtp_server": "",
+      "smtp_port": 587,
+      "username": "",
+      "password": ""
+    },
+    "slack": {
+      "enabled": false,
+      "webhook_url": ""
+    },
+    "telegram": {
+      "enabled": true,
+      "bot_token": "",
+      "chat_id": ""
+    }
+  },
+  "backup": {
+    "enabled": true,
+    "retention_days": 30,
+    "compression": true,
+    "encryption": false
+  },
+  "performance": {
+    "max_concurrent_operations": 10,
+    "queue_size_limit": 1000,
+    "memory_limit_mb": 512
+  },
+  "security": {
+    "api_key_required": false,
+    "rate_limiting": {
+      "enabled": true,
+      "requests_per_minute": 100
+    }
+  },
+  "obsidian": {
+    "enabled": true,
+    "vault_path": "D:/ObsidianVault",
+    "sync_interval": 300,
+    "auto_sync": true,
+    "folders": {
+      "tasks": "Tasks",
+      "calendar": "Calendar",
+      "notes": "Notes",
+      "daily": "Daily"
+    },
+    "templates": {
+      "task": "templates/task.md",
+      "daily": "templates/daily.md",
+      "meeting": "templates/meeting.md"
+    }
+  },
+  "mobile": {
+    "enabled": true,
+    "web_interface": {
+      "enabled": true,
+      "port": 8080,
+      "host": "0.0.0.0",
+      "ssl": false,
+      "auth_required": false,
+      "username": "",
+      "password": ""
+    },
+    "api": {
+      "enabled": true,
+      "rate_limit": 100,
+      "cors": true
+    },
+    "database": {
+      "path": "mobile_tasks.db",
+      "backup_interval": 3600
+    },
+    "pwa": {
+      "enabled": true,
+      "name": "Task Manager",
+      "short_name": "Tasks",
+      "theme_color": "#007bff",
+      "background_color": "#ffffff"
+    }
+  },
+  "sync_options": {
+    "cloud_storage": {
+      "enabled": false,
+      "type": "dropbox",
+      "api_key": "",
+      "folder": "/Tasks"
+    },
+    "calendar_sync": {
+      "enabled": true,
+      "google_calendar": {
+        "enabled": false,
+        "credentials_file": "",
+        "calendar_id": ""
+      },
+      "outlook": {
+        "enabled": false,
+        "client_id": "",
+        "client_secret": ""
+      }
+    },
+    "conflict_resolution": "latest_wins",
+    "offline_mode": true,
+    "data_encryption": false
+  }
+} 

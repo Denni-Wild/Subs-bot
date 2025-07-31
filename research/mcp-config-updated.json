@@ -1,0 +1,132 @@
+{
+  "mcpServers": {
+    "google-sheets": {
+      "command": "uvx",
+      "args": [
+        "mcp-google-sheets@latest"
+      ],
+      "env": {
+        "SERVICE_ACCOUNT_PATH": "D:\\PY\\Mental_KPI2\\cred.json",
+        "DRIVE_FOLDER_ID": "1OaqVi8p4N4jSX0Ex2WXOv2uuFPJJfmHJ"
+      },
+      "healthcheck_url": "http://localhost:8000/health"
+    },
+    "Context7": {
+      "url": "https://mcp.context7.com/mcp"
+    },
+    "zep-docs": {
+      "transport": "sse",
+      "url": "https://docs-mcp.getzep.com/sse"
+    },
+    "Linear": {
+      "url": "https://mcp.linear.app/sse"
+    },
+    "Exa Search": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "exa",
+        "--key",
+        "91e33c1c-8fe4-4d6a-9066-81386192564b",
+        "--profile",
+        "selfish-primate-81UpDa"
+      ],
+      "env": {}
+    },
+    "deltatask": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "D:/PY/MCP/DeltaTask",
+        "run",
+        "server.py"
+      ]
+    },
+    "hpkv-memory-server": {
+      "command": "npx",
+      "args": ["mcp-remote", "https://memory-mcp.hpkv.io/sse"]
+    },
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@itseasy21/mcp-knowledge-graph"
+      ],
+      "env": {
+        "MEMORY_FILE_PATH": "D:/PY/MCP/all_memories.jsonl"
+      }
+    },
+    "shrimp-task-manager": {
+      "command": "node",
+      "args": ["D:/PY/MCP/mcp-shrimp-task-manager/dist/index.js"],
+      "env": {
+        "DATA_DIR": "D:/PY/MCP/mcp-shrimp-task-manager/ShrimpData", 
+        "TEMPLATES_USE": "en",
+        "ENABLE_GUI": "true"
+      }
+    },
+    "mcp-calendar": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-calendar"
+      ],
+      "env": {
+        "CALENDAR_DATA_DIR": "D:/PY/MCP/calendar-data"
+      }
+    },
+    "mcp-notifications": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-notifications"
+      ],
+      "env": {
+        "NOTIFICATION_DATA_DIR": "D:/PY/MCP/notifications-data"
+      }
+    },
+    "mcp-time-tracker": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-time-tracking"
+      ],
+      "env": {
+        "TIME_TRACKING_DATA_DIR": "D:/PY/MCP/time-tracking-data"
+      }
+    },
+    "mcp-git": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-git"
+      ],
+      "env": {
+        "GIT_WORKSPACE": "D:/PY"
+      }
+    },
+    "mcp-filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem"
+      ],
+      "env": {
+        "FILESYSTEM_ROOT": "D:/PY"
+      }
+    },
+    "mcp-backup": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-backup"
+      ],
+      "env": {
+        "BACKUP_DATA_DIR": "D:/PY/MCP/backup-data"
+      }
+    }
+  }
+} 
