@@ -1,17 +1,22 @@
-python-telegram-bot
-youtube-transcript-api
-python-dotenv
-requests
-asyncio
+# Core bot dependencies
+python-telegram-bot>=22.0
+youtube-transcript-api>=1.0
+python-dotenv>=1.0
+requests>=2.25
+
+# Audio processing dependencies
+pydub>=0.25
+ffmpeg-python>=0.2
 
 # Voice message transcription dependencies
-websockets
-pydub
-ffmpeg-python
+websockets>=10.0
 
 # Testing dependencies
-pytest
-pytest-asyncio
-pytest-mock
-responses
-aioresponses 
+pytest>=7.0
+pytest-asyncio>=0.21
+pytest-mock>=3.10
+responses>=0.23
+aioresponses>=0.7
+
+# Note: asyncio is part of Python standard library since Python 3.7
+# No need to install it separately 
