@@ -59,7 +59,10 @@ START_MESSAGE = (
     '📚 **Команды:**\n'
     '/start - Начать работу\n'
     '/help - Подробная справка\n'
-    '/about - О боте\n\n'
+    '/about - О боте\n'
+    '/subs - Получить субтитры\n'
+    '/voice - Расшифровать голос\n'
+    '/info - Краткая информация\n\n'
     '🚀 **Начните прямо сейчас!**'
 )
 
@@ -100,7 +103,7 @@ HELP_MESSAGE = (
 )
 
 ABOUT_MESSAGE = (
-    '🤖 **О BOTE**\n\n'
+    '🤖 **О БОТЕ**\n\n'
     '**YouTube Subtitle Bot** - это умный помощник для работы с YouTube-контентом.\n\n'
     '🎯 **Наша миссия:**\n'
     'Сделать YouTube-контент более доступным и удобным для изучения.\n\n'
@@ -123,6 +126,31 @@ ABOUT_MESSAGE = (
     'При возникновении проблем используйте /help\n\n'
     '🚀 **Версия:** 2.0\n'
     '📅 **Обновлено:** 2024'
+)
+
+INFO_MESSAGE = (
+    'ℹ️ **КРАТКАЯ ИНФОРМАЦИЯ**\n\n'
+    '🎯 **Что умеет бот:**\n'
+    '• 📺 Получать субтитры с YouTube-видео\n'
+    '• 🤖 Создавать ИИ-суммаризацию\n'
+    '• 🎤 Расшифровывать голосовые сообщения\n'
+    '• 🌍 Поддерживать множество языков\n\n'
+    '⚡ **Быстрый старт:**\n'
+    '1. Отправьте ссылку на YouTube-видео\n'
+    '2. Выберите язык и действие\n'
+    '3. Получите результат!\n\n'
+    '🎤 **Голосовые сообщения:**\n'
+    'Просто отправьте голосовое сообщение\n'
+    'Максимум: 5 минут\n\n'
+    '⏱️ **Ограничения:**\n'
+    '• Не чаще 1 запроса в 15 секунд\n'
+    '• ИИ-суммаризация: 2-3 минуты\n'
+    '• Голос: до 5 минут\n\n'
+    '💡 **Советы:**\n'
+    '• Используйте кнопки для удобства\n'
+    '• Длинные результаты отправляются файлами\n'
+    '• При ошибках ждите 15 секунд\n\n'
+    '📚 **Подробнее:** /help'
 )
 
 # --- Вспомогательные функции ---
@@ -430,8 +458,10 @@ def build_model_keyboard():
 
 def build_main_keyboard():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton('📚 Помощь', callback_data='help')],
         [InlineKeyboardButton('📺 Получить субтитры', callback_data='get_subs')],
+        [InlineKeyboardButton('🎤 Расшифровать голос', callback_data='voice_info')],
+        [InlineKeyboardButton('📚 Помощь', callback_data='help')],
+        [InlineKeyboardButton('ℹ️ Информация', callback_data='info')],
         [InlineKeyboardButton('🤖 О боте', callback_data='about')]
     ])
 
@@ -452,6 +482,38 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(ABOUT_MESSAGE, reply_markup=build_main_keyboard())
+
+async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(INFO_MESSAGE, reply_markup=build_main_keyboard())
+
+async def subs_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        '📺 **ПОЛУЧЕНИЕ СУБТИТРОВ**\n\n'
+        'Отправьте ссылку на YouTube-видео, и я помогу вам получить субтитры!\n\n'
+        '🎯 **Что можно сделать:**\n'
+        '• 📄 Получить только субтитры\n'
+        '• 🤖 Субтитры + ИИ-суммаризация\n'
+        '• 🔮 Только ИИ-суммаризация\n\n'
+        '📝 **Форматы:**\n'
+        '• С временными метками\n'
+        '• Без временных меток\n\n'
+        '🚀 **Отправьте ссылку прямо сейчас!**'
+    )
+
+async def voice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        '🎤 **РАСШИФРОВКА ГОЛОСОВЫХ СООБЩЕНИЙ**\n\n'
+        'Отправьте голосовое сообщение, и я расшифрую его в текст!\n\n'
+        '✅ **Поддерживается:**\n'
+        '• Русский язык\n'
+        '• Английский язык\n'
+        '• Длительность до 5 минут\n\n'
+        '⚠️ **Ограничения:**\n'
+        '• Максимум 5 минут (300 секунд)\n'
+        '• Хорошее качество звука\n'
+        '• Четкая речь\n\n'
+        '🚀 **Отправьте голосовое сообщение прямо сейчас!**'
+    )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -797,6 +859,23 @@ async def main_keyboard_callback(update: Update, context: ContextTypes.DEFAULT_T
         await query.edit_message_text('Пришлите ссылку на YouTube-видео или его ID.')
     elif query.data == 'about':
         await query.edit_message_text(ABOUT_MESSAGE, reply_markup=build_main_keyboard())
+    elif query.data == 'info':
+        await query.edit_message_text(INFO_MESSAGE, reply_markup=build_main_keyboard())
+    elif query.data == 'voice_info':
+        await query.edit_message_text(
+            '🎤 **РАСШИФРОВКА ГОЛОСОВЫХ СООБЩЕНИЙ**\n\n'
+            'Отправьте голосовое сообщение, и я расшифрую его в текст!\n\n'
+            '✅ **Поддерживается:**\n'
+            '• Русский язык\n'
+            '• Английский язык\n'
+            '• Длительность до 5 минут\n\n'
+            '⚠️ **Ограничения:**\n'
+            '• Максимум 5 минут (300 секунд)\n'
+            '• Хорошее качество звука\n'
+            '• Четкая речь\n\n'
+            '🚀 **Отправьте голосовое сообщение прямо сейчас!**',
+            reply_markup=build_main_keyboard()
+        )
 
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text('Неизвестная команда. Для справки используйте /help.', reply_markup=build_main_keyboard())
@@ -892,13 +971,16 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('help', help_command))
     app.add_handler(CommandHandler('about', about_command))
+    app.add_handler(CommandHandler('info', info_command))
+    app.add_handler(CommandHandler('subs', subs_command))
+    app.add_handler(CommandHandler('voice', voice_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice_message))
     app.add_handler(CallbackQueryHandler(language_callback, pattern=r'^lang_'))
     app.add_handler(CallbackQueryHandler(action_callback, pattern=r'^action_'))
     app.add_handler(CallbackQueryHandler(model_callback, pattern=r'^model_'))
     app.add_handler(CallbackQueryHandler(format_callback, pattern=r'^format_'))
-    app.add_handler(CallbackQueryHandler(main_keyboard_callback, pattern=r'^(help|get_subs|about)$'))
+    app.add_handler(CallbackQueryHandler(main_keyboard_callback, pattern=r'^(help|get_subs|about|info|voice_info)$'))
     app.add_handler(CallbackQueryHandler(voice_callback, pattern=r'^(voice_force_|voice_continue_|voice_cancel)$'))
     app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
     print('Бот запущен!')
