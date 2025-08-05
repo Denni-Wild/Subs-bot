@@ -41,34 +41,50 @@ class VoiceTranscriber:
             return False, "API ключ для распознавания речи не настроен", {}
         
         try:
+            logger.info(f"🔄 Начинаю обработку голосового файла: {file_path}")
+            
             # Конвертируем в формат, подходящий для API
+            logger.info("🎵 Конвертирую аудио в подходящий формат")
             converted_path = await self._convert_audio_format(file_path)
+            logger.info(f"✅ Аудио сконвертировано: {converted_path}")
             
             # Загружаем файл в Soniox
+            logger.info("📤 Загружаю файл в Soniox API")
             file_id = await self._upload_file(converted_path)
             if not file_id:
+                logger.error("❌ Ошибка загрузки аудио файла в Soniox")
                 return False, "Ошибка загрузки аудио файла", {}
+            logger.info(f"✅ Файл загружен в Soniox, file_id: {file_id}")
             
             # Запускаем расшифровку
+            logger.info("🚀 Запускаю процесс транскрипции")
             transcription_id = await self._start_transcription(file_id)
             if not transcription_id:
+                logger.error("❌ Ошибка запуска расшифровки")
                 return False, "Ошибка запуска расшифровки", {}
+            logger.info(f"✅ Транскрипция запущена, transcription_id: {transcription_id}")
             
             # Ждем завершения
+            logger.info("⏳ Ожидаю завершения транскрипции")
             success = await self._wait_for_completion(transcription_id)
             if not success:
+                logger.error("❌ Ошибка при расшифровке аудио")
                 return False, "Ошибка при расшифровке аудио", {}
+            logger.info("✅ Транскрипция завершена успешно")
             
             # Получаем результат
+            logger.info("📥 Получаю результат транскрипции")
             text, stats = await self._get_transcript(transcription_id)
+            logger.info(f"✅ Результат получен: {len(text)} символов, статистика: {stats}")
             
             # Очищаем ресурсы
+            logger.info("🗑️ Очищаю ресурсы в Soniox")
             await self._cleanup(file_id, transcription_id)
             
             return True, text, stats
             
         except Exception as e:
-            logger.error(f"Ошибка при расшифровке голосового сообщения: {e}")
+            logger.error(f"❌ Ошибка при расшифровке голосового сообщения: {e}", exc_info=True)
             return False, f"Ошибка при расшифровке: {str(e)}", {}
     
     async def _convert_audio_format(self, file_path: str) -> str:
