@@ -724,6 +724,10 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
         return
     elif voice.duration > 180:  # Более 3 минут - предупреждение
         logger.info(f'⚠️ Пользователь {user_id} отправил длинное голосовое сообщение: {voice.duration} сек, требуется подтверждение')
+        
+        # Сохраняем file_id в контексте пользователя для последующего использования
+        context.user_data['pending_voice_file_id'] = voice.file_id
+        
         await update.message.reply_text(
             '⚠️ **Длинное голосовое сообщение**\n\n'
             f'📊 Длительность: {voice.duration} секунд ({voice.duration//60} мин {voice.duration%60} сек)\n'
@@ -1066,23 +1070,6 @@ async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def voice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает callback'и для голосовых сообщений"""
     query = update.callback_query
-    await query.answer()
-    
-    if query.data == 'voice_cancel':
-        await query.edit_message_text('❌ Обработка голосового сообщения отменена.')
-        return
-    
-    elif query.data == 'voice_force':
-        # Нужно получить file_id из контекста или сообщения
-        await query.edit_message_text('⚠️ **Попытка обработки длинного сообщения**\n\n🔄 Обрабатываю... Это может занять до 5 минут.')
-        # Пока просто отменяем, так как file_id не передается
-        await query.edit_message_text('❌ Функция временно недоступна. Отправьте голосовое сообщение заново.')
-    
-    elif query.data == 'voice_continue':
-        # Нужно получить file_id из контекста или сообщения
-        await query.edit_message_text('🔄 Обрабатываю длинное голосовое сообщение...')
-        # Пока просто отменяем, так как file_id не передается
-        await query.edit_message_text('❌ Функция временно недоступна. Отправьте голосовое сообщение заново.')
     user_id = update.effective_user.id
     
     logger.info(f'📞 Получен callback для голосового сообщения: {query.data} от пользователя {user_id}')
@@ -1092,8 +1079,27 @@ async def voice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if query.data == 'voice_cancel':
             logger.info(f'❌ Пользователь {user_id} отменил обработку голосового сообщения')
+            # Очищаем сохраненный file_id
+            context.user_data.pop('pending_voice_file_id', None)
             await query.edit_message_text('❌ Обработка голосового сообщения отменена.')
             return
+        
+        elif query.data == 'voice_continue':
+            # Получаем file_id из контекста пользователя
+            file_id = context.user_data.get('pending_voice_file_id')
+            if not file_id:
+                logger.error(f'❌ Не найден file_id для пользователя {user_id}')
+                await query.edit_message_text('❌ Ошибка: не найден файл голосового сообщения. Отправьте сообщение заново.')
+                return
+            
+            logger.info(f'✅ Пользователь {user_id} подтвердил обработку длинного голосового сообщения: {file_id}')
+            logger.info(f'🔄 Начинаю обработку длинного голосового сообщения для пользователя {user_id}')
+            await query.edit_message_text('🔄 Обрабатываю длинное голосовое сообщение...')
+            
+            # Очищаем сохраненный file_id
+            context.user_data.pop('pending_voice_file_id', None)
+            
+            await process_voice_message_by_file_id(update, context, file_id, force=False)
         
         elif query.data.startswith('voice_force_'):
             file_id = query.data.replace('voice_force_', '')
@@ -1240,7 +1246,7 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(model_callback, pattern=r'^model_'))
     app.add_handler(CallbackQueryHandler(format_callback, pattern=r'^format_'))
     app.add_handler(CallbackQueryHandler(main_keyboard_callback, pattern=r'^(help|get_subs|about|info|voice_info)$'))
-    app.add_handler(CallbackQueryHandler(voice_callback, pattern=r'^(voice_force_|voice_continue_|voice_cancel)$'))
+    app.add_handler(CallbackQueryHandler(voice_callback, pattern=r'^(voice_force_|voice_continue_|voice_continue|voice_cancel)$'))
     app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
     print('Бот запущен!')
     app.run_polling() 
