@@ -1,0 +1,128 @@
+{
+  "timestamp": "2025-08-01T10:16:17.134504",
+  "server_health": {
+    "deltatask": {
+      "name": "deltatask",
+      "status": "offline",
+      "response_time": 0.0,
+      "last_check": "2025-08-01T10:16:17.130506",
+      "error_count": 0,
+      "last_error": null
+    },
+    "shrimp_task_manager": {
+      "name": "shrimp_task_manager",
+      "status": "offline",
+      "response_time": 0.0,
+      "last_check": "2025-08-01T10:16:17.130506",
+      "error_count": 0,
+      "last_error": null
+    },
+    "hpkv_memory": {
+      "name": "hpkv_memory",
+      "status": "offline",
+      "response_time": 0.0,
+      "last_check": "2025-08-01T10:16:17.130506",
+      "error_count": 0,
+      "last_error": null
+    },
+    "memory": {
+      "name": "memory",
+      "status": "offline",
+      "response_time": 0.0,
+      "last_check": "2025-08-01T10:16:17.130506",
+      "error_count": 0,
+      "last_error": null
+    },
+    "calendar": {
+      "name": "calendar",
+      "status": "offline",
+      "response_time": 0.0,
+      "last_check": "2025-08-01T10:16:17.130506",
+      "error_count": 0,
+      "last_error": null
+    },
+    "notifications": {
+      "name": "notifications",
+      "status": "offline",
+      "response_time": 0.0,
+      "last_check": "2025-08-01T10:16:17.130506",
+      "error_count": 0,
+      "last_error": null
+    },
+    "time_tracker": {
+      "name": "time_tracker",
+      "status": "offline",
+      "response_time": 0.0,
+      "last_check": "2025-08-01T10:16:17.130506",
+      "error_count": 0,
+      "last_error": null
+    },
+    "git": {
+      "name": "git",
+      "status": "offline",
+      "response_time": 0.0,
+      "last_check": "2025-08-01T10:16:17.130506",
+      "error_count": 0,
+      "last_error": null
+    },
+    "filesystem": {
+      "name": "filesystem",
+      "status": "offline",
+      "response_time": 0.0,
+      "last_check": "2025-08-01T10:16:17.130506",
+      "error_count": 0,
+      "last_error": null
+    },
+    "backup": {
+      "name": "backup",
+      "status": "offline",
+      "response_time": 0.0,
+      "last_check": "2025-08-01T10:16:17.130506",
+      "error_count": 0,
+      "last_error": null
+    }
+  },
+  "queue_size": 0,
+  "circuit_breakers": {
+    "deltatask": {
+      "state": "CLOSED",
+      "failure_count": 0
+    },
+    "shrimp_task_manager": {
+      "state": "CLOSED",
+      "failure_count": 0
+    },
+    "hpkv_memory": {
+      "state": "CLOSED",
+      "failure_count": 0
+    },
+    "memory": {
+      "state": "CLOSED",
+      "failure_count": 0
+    },
+    "calendar": {
+      "state": "CLOSED",
+      "failure_count": 0
+    },
+    "notifications": {
+      "state": "CLOSED",
+      "failure_count": 0
+    },
+    "time_tracker": {
+      "state": "CLOSED",
+      "failure_count": 0
+    },
+    "git": {
+      "state": "CLOSED",
+      "failure_count": 0
+    },
+    "filesystem": {
+      "state": "CLOSED",
+      "failure_count": 0
+    },
+    "backup": {
+      "state": "CLOSED",
+      "failure_count": 0
+    }
+  }
+}

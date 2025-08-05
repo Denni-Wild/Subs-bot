@@ -21,6 +21,13 @@ import signal
 import sys
 from pathlib import Path
 
+class EnumEncoder(json.JSONEncoder):
+    """Кастомный JSON-кодировщик для работы с Enum"""
+    def default(self, obj):
+        if isinstance(obj, Enum):
+            return obj.value
+        return super().default(obj)
+
 # Настройка логирования enterprise-уровня
 class EnterpriseLogger:
     """Enterprise-уровень логирования с ротацией и структурированными логами"""
@@ -64,7 +71,7 @@ class EnterpriseLogger:
             'timestamp': datetime.now().isoformat(),
             'details': details or {}
         }
-        self.logger.info(f"OPERATION: {json.dumps(log_data)}")
+        self.logger.info(f"OPERATION: {json.dumps(log_data, cls=EnumEncoder)}")
     
     def log_error(self, error: Exception, context: Dict = None):
         """Логирование ошибок с контекстом"""
@@ -75,7 +82,7 @@ class EnterpriseLogger:
             'context': context or {},
             'timestamp': datetime.now().isoformat()
         }
-        self.logger.error(f"ERROR: {json.dumps(error_data)}")
+        self.logger.error(f"ERROR: {json.dumps(error_data, cls=EnumEncoder)}")
 
 class TaskStatus(Enum):
     """Статусы задач"""
@@ -598,11 +605,22 @@ class EnterpriseTaskOrchestrator:
             except Exception as e:
                 self.logger.log_error(e, {"context": "monitoring_worker"})
     
+    def _serialize_server_health(self, health: ServerHealth) -> Dict:
+        """Сериализация ServerHealth в JSON-совместимый формат"""
+        return {
+            "name": health.name,
+            "status": health.status.value,  # Преобразуем Enum в строку
+            "response_time": health.response_time,
+            "last_check": health.last_check,
+            "error_count": health.error_count,
+            "last_error": health.last_error
+        }
+    
     async def _collect_metrics(self):
         """Сбор метрик"""
         metrics = {
             "timestamp": datetime.now().isoformat(),
-            "server_health": {name: asdict(health) for name, health in self.server_health.items()},
+            "server_health": {name: self._serialize_server_health(health) for name, health in self.server_health.items()},
             "queue_size": self.task_queue.qsize(),
             "circuit_breakers": {
                 name: {"state": cb.state, "failure_count": cb.failure_count}
@@ -615,7 +633,7 @@ class EnterpriseTaskOrchestrator:
         # Сохранение метрик
         try:
             async with aiofiles.open("monitoring_metrics.json", "w") as f:
-                await f.write(json.dumps(metrics, indent=2))
+                await f.write(json.dumps(metrics, indent=2, cls=EnumEncoder))
         except Exception as e:
             self.logger.log_error(e, {"context": "metrics_save"})
     
@@ -623,7 +641,7 @@ class EnterpriseTaskOrchestrator:
         """Получение статуса здоровья системы"""
         return {
             "orchestrator_status": "running" if self.is_running else "stopped",
-            "server_health": {name: asdict(health) for name, health in self.server_health.items()},
+            "server_health": {name: self._serialize_server_health(health) for name, health in self.server_health.items()},
             "queue_size": self.task_queue.qsize(),
             "last_metrics": self.monitoring_data
         }
@@ -663,7 +681,7 @@ async def main():
         
         # Получение статуса здоровья
         health = orchestrator.get_health_status()
-        print(f"🏥 Health status: {json.dumps(health, indent=2)}")
+        print(f"🏥 Health status: {json.dumps(health, indent=2, cls=EnumEncoder)}")
         
         # Ожидание завершения
         await asyncio.sleep(10)

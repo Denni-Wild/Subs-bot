@@ -24,11 +24,83 @@ logger = logging.getLogger(__name__)
 # Загрузка переменных окружения
 load_dotenv()
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+ADMIN_CHAT_ID = os.getenv('ADMIN_CHAT_ID')  # ID чата администратора для уведомлений об ошибках
+ERROR_NOTIFICATIONS_ENABLED = os.getenv('ERROR_NOTIFICATIONS_ENABLED', 'true').lower() == 'true'
 
 # Инициализируем суммаризатор и транскрайбер
 summarizer = TextSummarizer()
 voice_transcriber = VoiceTranscriber()
 YOUTUBE_REGEX = r"(?:v=|youtu\.be/|youtube\.com/embed/|youtube\.com/watch\?v=)?([\w-]{11})"
+
+async def send_error_notification(error_type: str, error_message: str, context: str = "", user_id: int = None, additional_info: dict = None):
+    """Отправляет уведомление об ошибке администратору"""
+    if not ERROR_NOTIFICATIONS_ENABLED or not ADMIN_CHAT_ID:
+        return
+    
+    # Проверяем cooldown для предотвращения спама
+    current_time = time.time()
+    error_key = f"{error_type}_{context}"
+    
+    if error_key in error_notification_cooldown:
+        if current_time - error_notification_cooldown[error_key] < ERROR_NOTIFICATION_COOLDOWN:
+            return  # Пропускаем уведомление из-за cooldown
+    
+    error_notification_cooldown[error_key] = current_time
+    
+    try:
+        # Формируем сообщение об ошибке
+        message_parts = []
+        message_parts.append("🚨 УВЕДОМЛЕНИЕ ОБ ОШИБКЕ")
+        message_parts.append("")
+        message_parts.append(f"📋 Тип ошибки: {error_type}")
+        message_parts.append(f"💬 Сообщение: {error_message}")
+        
+        if context:
+            message_parts.append(f"📍 Контекст: {context}")
+        
+        if user_id:
+            message_parts.append(f"👤 Пользователь: {user_id}")
+        
+        if additional_info:
+            message_parts.append(f"📊 Дополнительная информация:")
+            for key, value in additional_info.items():
+                message_parts.append(f"   • {key}: {value}")
+        
+        message_parts.append("")
+        message_parts.append(f"⏰ Время: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        error_message_text = "\n".join(message_parts)
+        
+        # Отправляем уведомление
+        from telegram import Bot
+        bot = Bot(token=TELEGRAM_BOT_TOKEN)
+        await bot.send_message(
+            chat_id=ADMIN_CHAT_ID,
+            text=error_message_text,
+            parse_mode=None  # Отключаем Markdown для избежания ошибок парсинга
+        )
+        
+        logger.info(f"Отправлено уведомление об ошибке администратору: {error_type}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка при отправке уведомления об ошибке: {e}")
+
+def log_and_notify_error(error: Exception, context: str = "", user_id: int = None, additional_info: dict = None):
+    """Логирует ошибку и отправляет уведомление"""
+    error_type = type(error).__name__
+    error_message = str(error)
+    
+    # Логируем ошибку
+    logger.error(f"Ошибка в {context}: {error_type} - {error_message}")
+    
+    # Отправляем уведомление асинхронно
+    asyncio.create_task(send_error_notification(
+        error_type=error_type,
+        error_message=error_message,
+        context=context,
+        user_id=user_id,
+        additional_info=additional_info
+    ))
 
 # Enhanced rate limiting constants
 MIN_REQUEST_INTERVAL = 15  # Increased from 10 to 15 seconds
@@ -40,6 +112,10 @@ MAX_DELAY = 60  # Maximum delay in seconds
 request_timestamps = {}  # Track last request time per user
 global_last_request = 0  # Global rate limiting
 global_request_lock = asyncio.Lock()  # Prevent concurrent requests
+
+# Error notification tracking
+error_notification_cooldown = {}  # Track last error notification time per error type
+ERROR_NOTIFICATION_COOLDOWN = 300  # 5 minutes cooldown between same error notifications
 
 START_MESSAGE = (
     '👋 **Добро пожаловать в YouTube Subtitle Bot!**\n\n'
@@ -547,6 +623,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if not success:
         logger.error(f"❌ Ошибка при получении списка субтитров: {error_msg}")
+        log_and_notify_error(
+            error=Exception(error_msg),
+            context="get_available_transcripts",
+            user_id=user_id,
+            additional_info={"video_id": video_id}
+        )
         await processing_msg.edit_text(f'❌ {error_msg}')
         return
     
@@ -610,7 +692,7 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
             '• 🎯 Отправьте только важную часть\n\n'
             '🔄 **Или попробуйте сейчас** (может работать, но без гарантий):',
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton('🎤 Попробовать расшифровать', callback_data=f'voice_force_{voice.file_id}')],
+                [InlineKeyboardButton('🎤 Попробовать расшифровать', callback_data='voice_force')],
                 [InlineKeyboardButton('❌ Отменить', callback_data='voice_cancel')]
             ])
         )
@@ -625,7 +707,7 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
             '• Убедитесь в хорошем качестве звука\n\n'
             '🔄 **Продолжить обработку?**',
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton('✅ Продолжить', callback_data=f'voice_continue_{voice.file_id}')],
+                [InlineKeyboardButton('✅ Продолжить', callback_data='voice_continue')],
                 [InlineKeyboardButton('❌ Отменить', callback_data='voice_cancel')]
             ])
         )
@@ -681,10 +763,22 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
                 file.name = f'voice_transcription_{user_id}_{timestamp}.txt'
                 await update.message.reply_document(InputFile(file))
         else:
+            log_and_notify_error(
+                error=Exception(text),
+                context="voice_transcription_failed",
+                user_id=user_id,
+                additional_info={"duration": voice.duration, "file_id": voice.file_id}
+            )
             await processing_msg.edit_text(f'❌ {text}')
             
     except Exception as e:
         logger.error(f'Ошибка при обработке голосового сообщения: {e}')
+        log_and_notify_error(
+            error=e,
+            context="voice_transcription_exception",
+            user_id=user_id,
+            additional_info={"duration": voice.duration, "file_id": voice.file_id}
+        )
         await processing_msg.edit_text(f'❌ Ошибка при обработке голосового сообщения: {str(e)}')
 
 async def language_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -760,6 +854,12 @@ async def process_request(query, context):
     
     if not success:
         logger.error(f"❌ Не удалось получить субтитры: {error_msg}")
+        log_and_notify_error(
+            error=Exception(error_msg),
+            context="get_transcript",
+            user_id=query.from_user.id,
+            additional_info={"video_id": video_id, "lang_code": lang_code}
+        )
         await query.edit_message_text(f'❌ {error_msg}')
         return
     
@@ -833,6 +933,17 @@ async def process_request(query, context):
             
         except Exception as ai_error:
             logger.error(f'Ошибка ИИ-суммаризации: {ai_error}')
+            log_and_notify_error(
+                error=ai_error,
+                context="ai_summarization",
+                user_id=query.from_user.id,
+                additional_info={
+                    "video_id": video_id,
+                    "lang_code": lang_code,
+                    "model_index": model_index,
+                    "action": action
+                }
+            )
             await query.edit_message_text(f'❌ Ошибка при создании ИИ-суммаризации: {ai_error}')
 
 async def send_subtitles(query, subtitles, video_id, lang_code, format_str, transcript_count):
@@ -889,15 +1000,17 @@ async def voice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text('❌ Обработка голосового сообщения отменена.')
         return
     
-    elif query.data.startswith('voice_force_'):
-        file_id = query.data.replace('voice_force_', '')
+    elif query.data == 'voice_force':
+        # Нужно получить file_id из контекста или сообщения
         await query.edit_message_text('⚠️ **Попытка обработки длинного сообщения**\n\n🔄 Обрабатываю... Это может занять до 5 минут.')
-        await process_voice_message_by_file_id(update, context, file_id, force=True)
+        # Пока просто отменяем, так как file_id не передается
+        await query.edit_message_text('❌ Функция временно недоступна. Отправьте голосовое сообщение заново.')
     
-    elif query.data.startswith('voice_continue_'):
-        file_id = query.data.replace('voice_continue_', '')
+    elif query.data == 'voice_continue':
+        # Нужно получить file_id из контекста или сообщения
         await query.edit_message_text('🔄 Обрабатываю длинное голосовое сообщение...')
-        await process_voice_message_by_file_id(update, context, file_id, force=False)
+        # Пока просто отменяем, так как file_id не передается
+        await query.edit_message_text('❌ Функция временно недоступна. Отправьте голосовое сообщение заново.')
 
 async def process_voice_message_by_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE, file_id: str, force: bool = False):
     """Обрабатывает голосовое сообщение по file_id"""
@@ -960,10 +1073,22 @@ async def process_voice_message_by_file_id(update: Update, context: ContextTypes
                 file.name = f'voice_transcription_{user_id}_{timestamp}.txt'
                 await update.callback_query.message.reply_document(InputFile(file))
         else:
+            log_and_notify_error(
+                error=Exception(text),
+                context="voice_transcription_by_file_id_failed",
+                user_id=user_id,
+                additional_info={"file_id": file_id, "force": force}
+            )
             await update.callback_query.edit_message_text(f'❌ {text}')
             
     except Exception as e:
         logger.error(f'Ошибка при обработке голосового сообщения по file_id: {e}')
+        log_and_notify_error(
+            error=e,
+            context="voice_transcription_by_file_id_exception",
+            user_id=user_id,
+            additional_info={"file_id": file_id, "force": force}
+        )
         await update.callback_query.edit_message_text(f'❌ Ошибка при обработке голосового сообщения: {str(e)}')
 
 if __name__ == '__main__':

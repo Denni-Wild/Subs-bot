@@ -1,4 +1,24 @@
 .env
 __pycache__/
 *.pyc
-.venv/ 
+.venv/
+# Temporary files and directories
+temp_files/
+logs/
+*.log
+# IDE files
+.vscode/
+.idea/
+# OS files
+.DS_Store
+Thumbs.db
+# Python cache
+*.pyo
+*.pyd
+.Python
+# Virtual environments
+venv/
+env/
+# Local configuration
+.env.local
+.env.*.local 
