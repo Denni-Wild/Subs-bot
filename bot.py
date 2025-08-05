@@ -951,6 +951,21 @@ async def process_request(query, context):
             response_parts.append("\n🤖 **ИИ-СУММАРИЗАЦИЯ:**")
             response_parts.append(summary)
             
+            # Если язык не русский, добавляем перевод
+            source_language = stats.get('source_language', 'unknown')
+            if source_language != 'ru':
+                logger.info(f"🌍 Язык не русский ({source_language}), создаю перевод...")
+                await query.edit_message_text('🌍 Создаю перевод на русский язык...')
+                
+                try:
+                    translation = await summarizer.translate_to_russian(summary, source_language, model_index)
+                    response_parts.append("\n🇷🇺 **ПЕРЕВОД НА РУССКИЙ:**")
+                    response_parts.append(translation)
+                    logger.info(f"✅ Перевод завершен успешно")
+                except Exception as translation_error:
+                    logger.error(f"❌ Ошибка перевода: {translation_error}")
+                    response_parts.append("\n❌ Не удалось создать перевод на русский язык")
+            
             # Статистика
             response_parts.append(f"\n📊 **Статистика:**")
             response_parts.append(f"• Модель: {stats.get('model', 'неизвестно')}")
@@ -958,6 +973,7 @@ async def process_request(query, context):
             response_parts.append(f"• Обработано частей: {stats.get('chunks', 0)}")
             response_parts.append(f"• Исходный размер: {stats.get('original_length', 0)} символов")
             response_parts.append(f"• Размер суммаризации: {stats.get('summary_length', 0)} символов")
+            response_parts.append(f"• Исходный язык: {source_language}")
             
             full_response = "\n".join(response_parts)
             

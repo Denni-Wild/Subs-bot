@@ -37,6 +37,68 @@ class TextSummarizer:
             "X-Title": "Telegram Subs-bot"
         }
     
+    def detect_language(self, text: str) -> str:
+        """
+        Определяет язык текста на основе простых эвристик
+        Returns: код языка ('ru', 'en', 'other')
+        """
+        # Простые эвристики для определения языка
+        text_lower = text.lower()
+        
+        # Русский язык
+        russian_chars = re.findall(r'[а-яё]', text_lower)
+        russian_ratio = len(russian_chars) / len(text_lower.replace(' ', '')) if text_lower.replace(' ', '') else 0
+        
+        # Английский язык
+        english_chars = re.findall(r'[a-z]', text_lower)
+        english_ratio = len(english_chars) / len(text_lower.replace(' ', '')) if text_lower.replace(' ', '') else 0
+        
+        # Определяем язык по преобладанию символов
+        if russian_ratio > 0.3:  # Если больше 30% русских символов
+            return 'ru'
+        elif english_ratio > 0.5:  # Если больше 50% английских символов
+            return 'en'
+        else:
+            return 'other'
+    
+    async def translate_to_russian(self, text: str, source_lang: str = None, model_index: int = 0) -> str:
+        """
+        Переводит текст на русский язык
+        Args:
+            text: текст для перевода
+            source_lang: исходный язык (если известен)
+            model_index: индекс модели для перевода
+        Returns:
+            переведенный текст или исходный текст в случае ошибки
+        """
+        if not self.api_key:
+            return text
+        
+        if model_index >= len(self.models):
+            model_index = 0
+        
+        model_name, model_id = self.models[model_index]
+        
+        # Формируем промпт для перевода
+        if source_lang == 'en':
+            prompt = "Переведи следующий текст с английского на русский язык, сохранив смысл и стиль:"
+        elif source_lang == 'other':
+            prompt = "Переведи следующий текст на русский язык, сохранив смысл и стиль:"
+        else:
+            prompt = "Переведи следующий текст на русский язык, сохранив смысл и стиль:"
+        
+        messages = [
+            {"role": "system", "content": "Ты - профессиональный переводчик. Переводи текст на русский язык, сохраняя смысл, стиль и структуру."},
+            {"role": "user", "content": f"{prompt}\n\n{text}"}
+        ]
+        
+        try:
+            result = await self._make_request(model_id, messages)
+            return result if result else text
+        except Exception as e:
+            print(f"Ошибка перевода: {e}")
+            return text
+    
     def split_text(self, text: str, max_len: int = None) -> List[str]:
         """Разбивает текст на части, не разрывая слова"""
         max_len = max_len or self.chunk_size
@@ -109,6 +171,9 @@ class TextSummarizer:
         model_name, model_id = self.models[model_index]
         prompt = custom_prompt or "Кратко изложи основные мысли этого фрагмента текста."
         
+        # Определяем язык исходного текста
+        source_language = self.detect_language(text)
+        
         # Разбиваем текст на части
         chunks = self.split_text(text)
         
@@ -126,7 +191,8 @@ class TextSummarizer:
                 "model": model_name,
                 "chunks": 1,
                 "original_length": len(text),
-                "summary_length": len(result) if result else 0
+                "summary_length": len(result) if result else 0,
+                "source_language": source_language
             }
             return result or "❌ Не удалось создать суммаризацию", stats
         
@@ -167,7 +233,8 @@ class TextSummarizer:
             "chunks": len(chunks),
             "original_length": len(text),
             "summary_length": len(final_summary) if final_summary else 0,
-            "processed_chunks": len(chunk_summaries)
+            "processed_chunks": len(chunk_summaries),
+            "source_language": source_language
         }
         
         return final_summary or "❌ Не удалось создать итоговую суммаризацию", stats
