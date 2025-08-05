@@ -18,14 +18,7 @@ from voice_transcriber import VoiceTranscriber
 import requests
 
 # Включаем логирование
-logging.basicConfig(
-    level=logging.INFO, 
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('bot.log'),
-        logging.StreamHandler()
-    ]
-)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # Загрузка переменных окружения
@@ -585,8 +578,6 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
     """Обрабатывает голосовые сообщения"""
     user_id = update.effective_user.id
     
-    logger.info(f'Получено голосовое сообщение от пользователя {user_id}')
-    
     # Check user rate limit
     if not await rate_limit_check(user_id):
         remaining_time = MIN_REQUEST_INTERVAL - (time.time() - request_timestamps.get(user_id, 0))
@@ -892,34 +883,25 @@ async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def voice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает callback'и для голосовых сообщений"""
     query = update.callback_query
-    user_id = update.effective_user.id
-    
-    logger.info(f'Получен callback для голосового сообщения: {query.data} от пользователя {user_id}')
-    
     await query.answer()
     
     if query.data == 'voice_cancel':
-        logger.info(f'Пользователь {user_id} отменил обработку голосового сообщения')
         await query.edit_message_text('❌ Обработка голосового сообщения отменена.')
         return
     
     elif query.data.startswith('voice_force_'):
         file_id = query.data.replace('voice_force_', '')
-        logger.info(f'Пользователь {user_id} запросил принудительную обработку голосового сообщения: {file_id}')
         await query.edit_message_text('⚠️ **Попытка обработки длинного сообщения**\n\n🔄 Обрабатываю... Это может занять до 5 минут.')
         await process_voice_message_by_file_id(update, context, file_id, force=True)
     
     elif query.data.startswith('voice_continue_'):
         file_id = query.data.replace('voice_continue_', '')
-        logger.info(f'Пользователь {user_id} подтвердил обработку длинного голосового сообщения: {file_id}')
         await query.edit_message_text('🔄 Обрабатываю длинное голосовое сообщение...')
         await process_voice_message_by_file_id(update, context, file_id, force=False)
 
 async def process_voice_message_by_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE, file_id: str, force: bool = False):
     """Обрабатывает голосовое сообщение по file_id"""
     user_id = update.effective_user.id
-    
-    logger.info(f'Начинаю обработку голосового сообщения для пользователя {user_id}, file_id: {file_id}, force: {force}')
     
     try:
         # Download voice file
