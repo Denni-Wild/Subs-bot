@@ -27,7 +27,7 @@ logging.basicConfig(
     level=logging.INFO, 
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('logs/bot.log'),
+        logging.FileHandler('logs/bot.log', encoding='utf-8'),
         logging.StreamHandler()
     ]
 )
@@ -795,9 +795,13 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
             full_response = "\n".join(response_parts)
             
             # Send response
-            if len(full_response) <= 4000:
+            if len(full_response) <= 3000:  # Уменьшаем лимит для Markdown
                 logger.info(f'📤 Отправляю результат транскрипции пользователю {user_id} (текст)')
-                await processing_msg.edit_text(full_response, parse_mode='Markdown')
+                try:
+                    await processing_msg.edit_text(full_response, parse_mode='Markdown')
+                except Exception as markdown_error:
+                    logger.warning(f"Ошибка Markdown разметки в голосовом сообщении, отправляю без разметки: {markdown_error}")
+                    await processing_msg.edit_text(full_response)
             else:
                 logger.info(f'📄 Результат слишком длинный, отправляю файлом пользователю {user_id}')
                 await processing_msg.edit_text("📄 Расшифровка слишком длинная, отправляю файлом.")
@@ -958,8 +962,12 @@ async def process_request(query, context):
             full_response = "\n".join(response_parts)
             
             # Отправляем ответ
-            if len(full_response) <= 4000:
-                await query.edit_message_text(full_response, parse_mode='Markdown')
+            if len(full_response) <= 3000:  # Уменьшаем лимит для Markdown
+                try:
+                    await query.edit_message_text(full_response, parse_mode='Markdown')
+                except Exception as markdown_error:
+                    logger.warning(f"Ошибка Markdown разметки, отправляю без разметки: {markdown_error}")
+                    await query.edit_message_text(full_response)
             else:
                 await query.edit_message_text("📄 Результат слишком длинный, отправляю файлом.")
                 file = BytesIO(full_response.encode('utf-8'))
@@ -1163,9 +1171,13 @@ async def process_voice_message_by_file_id(update: Update, context: ContextTypes
             full_response = "\n".join(response_parts)
             
             # Send response
-            if len(full_response) <= 4000:
+            if len(full_response) <= 3000:  # Уменьшаем лимит для Markdown
                 logger.info(f'📤 Отправляю результат транскрипции пользователю {user_id} (текст)')
-                await update.callback_query.edit_message_text(full_response, parse_mode='Markdown')
+                try:
+                    await update.callback_query.edit_message_text(full_response, parse_mode='Markdown')
+                except Exception as markdown_error:
+                    logger.warning(f"Ошибка Markdown разметки в голосовом сообщении, отправляю без разметки: {markdown_error}")
+                    await update.callback_query.edit_message_text(full_response)
             else:
                 logger.info(f'📄 Результат слишком длинный, отправляю файлом пользователю {user_id}')
                 await update.callback_query.edit_message_text("📄 Расшифровка слишком длинная, отправляю файлом.")
