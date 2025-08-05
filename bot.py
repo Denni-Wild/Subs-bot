@@ -677,11 +677,7 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
     """Обрабатывает голосовые сообщения"""
     user_id = update.effective_user.id
     
-<<<<<<< HEAD
-=======
     logger.info(f'🎤 Получено голосовое сообщение от пользователя {user_id}')
-    
->>>>>>> origin/cursor/investigate-long-voice-message-processing-failure-2dbf
     # Check user rate limit
     if not await rate_limit_check(user_id):
         remaining_time = MIN_REQUEST_INTERVAL - (time.time() - request_timestamps.get(user_id, 0))
@@ -811,7 +807,7 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
                 file.name = f'voice_transcription_{user_id}_{timestamp}.txt'
                 await update.message.reply_document(InputFile(file))
         else:
-<<<<<<< HEAD
+            logger.error(f'❌ Транскрипция неудачна для пользователя {user_id}: {text}')
             log_and_notify_error(
                 error=Exception(text),
                 context="voice_transcription_failed",
@@ -821,25 +817,17 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
             await processing_msg.edit_text(f'❌ {text}')
             
     except Exception as e:
-        logger.error(f'Ошибка при обработке голосового сообщения: {e}')
+        logger.error(f'❌ Ошибка при обработке голосового сообщения для пользователя {user_id}: {e}', exc_info=True)
         log_and_notify_error(
             error=e,
             context="voice_transcription_exception",
             user_id=user_id,
             additional_info={"duration": voice.duration, "file_id": voice.file_id}
         )
-        await processing_msg.edit_text(f'❌ Ошибка при обработке голосового сообщения: {str(e)}')
-=======
-            logger.error(f'❌ Транскрипция неудачна для пользователя {user_id}: {text}')
-            await processing_msg.edit_text(f'❌ {text}')
-            
-    except Exception as e:
-        logger.error(f'❌ Ошибка при обработке голосового сообщения для пользователя {user_id}: {e}', exc_info=True)
         try:
             await processing_msg.edit_text(f'❌ Ошибка при обработке голосового сообщения: {str(e)}')
         except Exception as edit_error:
             logger.error(f'❌ Не удалось отправить сообщение об ошибке пользователю {user_id}: {edit_error}')
->>>>>>> origin/cursor/investigate-long-voice-message-processing-failure-2dbf
 
 async def language_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -1054,7 +1042,6 @@ async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def voice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает callback'и для голосовых сообщений"""
     query = update.callback_query
-<<<<<<< HEAD
     await query.answer()
     
     if query.data == 'voice_cancel':
@@ -1072,7 +1059,6 @@ async def voice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text('🔄 Обрабатываю длинное голосовое сообщение...')
         # Пока просто отменяем, так как file_id не передается
         await query.edit_message_text('❌ Функция временно недоступна. Отправьте голосовое сообщение заново.')
-=======
     user_id = update.effective_user.id
     
     logger.info(f'📞 Получен callback для голосового сообщения: {query.data} от пользователя {user_id}')
@@ -1109,17 +1095,13 @@ async def voice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text('❌ Произошла ошибка при обработке команды.')
         except:
             pass
->>>>>>> origin/cursor/investigate-long-voice-message-processing-failure-2dbf
+
 
 async def process_voice_message_by_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE, file_id: str, force: bool = False):
     """Обрабатывает голосовое сообщение по file_id"""
     user_id = update.effective_user.id
     
-<<<<<<< HEAD
-=======
     logger.info(f'🎬 Начинаю обработку голосового сообщения для пользователя {user_id}, file_id: {file_id}, force: {force}')
-    
->>>>>>> origin/cursor/investigate-long-voice-message-processing-failure-2dbf
     try:
         # Download voice file
         logger.info(f'📥 Загружаю голосовой файл {file_id} для пользователя {user_id}')
@@ -1193,7 +1175,7 @@ async def process_voice_message_by_file_id(update: Update, context: ContextTypes
                 file.name = f'voice_transcription_{user_id}_{timestamp}.txt'
                 await update.callback_query.message.reply_document(InputFile(file))
         else:
-<<<<<<< HEAD
+            logger.error(f'❌ Транскрипция неудачна для пользователя {user_id}: {text}')
             log_and_notify_error(
                 error=Exception(text),
                 context="voice_transcription_by_file_id_failed",
@@ -1203,25 +1185,17 @@ async def process_voice_message_by_file_id(update: Update, context: ContextTypes
             await update.callback_query.edit_message_text(f'❌ {text}')
             
     except Exception as e:
-        logger.error(f'Ошибка при обработке голосового сообщения по file_id: {e}')
+        logger.error(f'❌ Ошибка при обработке голосового сообщения по file_id {file_id} для пользователя {user_id}: {e}', exc_info=True)
         log_and_notify_error(
             error=e,
             context="voice_transcription_by_file_id_exception",
             user_id=user_id,
             additional_info={"file_id": file_id, "force": force}
         )
-        await update.callback_query.edit_message_text(f'❌ Ошибка при обработке голосового сообщения: {str(e)}')
-=======
-            logger.error(f'❌ Транскрипция неудачна для пользователя {user_id}: {text}')
-            await update.callback_query.edit_message_text(f'❌ {text}')
-            
-    except Exception as e:
-        logger.error(f'❌ Ошибка при обработке голосового сообщения по file_id {file_id} для пользователя {user_id}: {e}', exc_info=True)
         try:
             await update.callback_query.edit_message_text(f'❌ Ошибка при обработке голосового сообщения: {str(e)}')
         except Exception as edit_error:
             logger.error(f'❌ Не удалось отправить сообщение об ошибке пользователю {user_id}: {edit_error}')
->>>>>>> origin/cursor/investigate-long-voice-message-processing-failure-2dbf
 
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
