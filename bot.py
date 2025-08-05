@@ -6,6 +6,7 @@ import asyncio
 import random
 import tempfile
 from io import BytesIO
+from pathlib import Path
 from telegram import Update, InputFile, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler,
@@ -17,9 +18,25 @@ from summarizer import TextSummarizer
 from voice_transcriber import VoiceTranscriber
 import requests
 
+# Создаем директорию для логов если её нет
+log_dir = Path("logs")
+log_dir.mkdir(exist_ok=True)
+
 # Включаем логирование
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, 
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('logs/bot.log'),
+        logging.StreamHandler()
+    ]
+)
 logger = logging.getLogger(__name__)
+
+# Отключаем логи от сторонних библиотек для чистоты логов
+logging.getLogger('telegram').setLevel(logging.WARNING)
+logging.getLogger('httpx').setLevel(logging.WARNING)
+logging.getLogger('urllib3').setLevel(logging.WARNING)
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -660,14 +677,21 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
     """Обрабатывает голосовые сообщения"""
     user_id = update.effective_user.id
     
+<<<<<<< HEAD
+=======
+    logger.info(f'🎤 Получено голосовое сообщение от пользователя {user_id}')
+    
+>>>>>>> origin/cursor/investigate-long-voice-message-processing-failure-2dbf
     # Check user rate limit
     if not await rate_limit_check(user_id):
         remaining_time = MIN_REQUEST_INTERVAL - (time.time() - request_timestamps.get(user_id, 0))
+        logger.warning(f'⚠️ Превышен лимит запросов для пользователя {user_id}, осталось ждать: {int(remaining_time)} сек')
         await update.message.reply_text(f'⚠️ Слишком много запросов. Подождите {int(remaining_time)} секунд.')
         return
     
     # Check if voice transcription is available
     if not voice_transcriber.is_available():
+        logger.error(f'❌ API транскрипции недоступен для пользователя {user_id} (SONIOX_API_KEY не настроен)')
         await update.message.reply_text(
             '❌ Расшифровка голосовых сообщений недоступна.\n'
             'Необходимо настроить SONIOX_API_KEY в переменных окружения.'
@@ -676,11 +700,15 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
     
     voice = update.message.voice
     if not voice:
+        logger.error(f'❌ Не удалось получить объект голосового сообщения для пользователя {user_id}')
         await update.message.reply_text('❌ Не удалось получить голосовое сообщение.')
         return
     
+    logger.info(f'📊 Голосовое сообщение: длительность {voice.duration} сек, file_id: {voice.file_id}, размер: {voice.file_size} байт')
+    
     # Check voice message duration and offer options for long messages
     if voice.duration > 300:  # Более 5 минут
+        logger.warning(f'⚠️ Пользователь {user_id} отправил слишком длинное голосовое сообщение: {voice.duration} сек (>{voice.duration//60} мин)')
         await update.message.reply_text(
             '⚠️ **Голосовое сообщение слишком длинное**\n\n'
             f'📊 Длительность: {voice.duration} секунд ({voice.duration//60} мин {voice.duration%60} сек)\n'
@@ -696,8 +724,10 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
                 [InlineKeyboardButton('❌ Отменить', callback_data='voice_cancel')]
             ])
         )
+        logger.info(f'📝 Отправлены опции для длинного голосового сообщения пользователю {user_id}')
         return
     elif voice.duration > 180:  # Более 3 минут - предупреждение
+        logger.info(f'⚠️ Пользователь {user_id} отправил длинное голосовое сообщение: {voice.duration} сек, требуется подтверждение')
         await update.message.reply_text(
             '⚠️ **Длинное голосовое сообщение**\n\n'
             f'📊 Длительность: {voice.duration} секунд ({voice.duration//60} мин {voice.duration%60} сек)\n'
@@ -711,32 +741,47 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
                 [InlineKeyboardButton('❌ Отменить', callback_data='voice_cancel')]
             ])
         )
+        logger.info(f'📝 Отправлено предупреждение о длинном голосовом сообщении пользователю {user_id}')
         return
     
     # Show processing message
+    logger.info(f'🔄 Начинаю прямую обработку голосового сообщения для пользователя {user_id} (длительность: {voice.duration} сек)')
     processing_msg = await update.message.reply_text('🎤 Расшифровываю голосовое сообщение...')
     
     try:
         # Download voice file
+        logger.info(f'📥 Загружаю голосовой файл {voice.file_id} для пользователя {user_id}')
         file = await context.bot.get_file(voice.file_id)
+        logger.info(f'✅ Файл получен, размер: {file.file_size} байт')
         
         # Create temporary file
         with tempfile.NamedTemporaryFile(suffix='.ogg', delete=False) as temp_file:
             temp_path = temp_file.name
         
+        logger.info(f'💾 Сохраняю файл во временную директорию: {temp_path}')
+        
         # Download the file
         await file.download_to_drive(temp_path)
+        logger.info(f'✅ Файл успешно загружен в {temp_path}')
         
         # Transcribe voice message
+        logger.info(f'🎤 Начинаю транскрипцию голосового сообщения для пользователя {user_id}')
+        start_time = time.time()
         success, text, stats = await voice_transcriber.transcribe_voice_message(voice, temp_path)
+        processing_time = time.time() - start_time
+        
+        logger.info(f'⏱️ Транскрипция завершена за {processing_time:.2f} секунд, успех: {success}')
         
         # Clean up temporary file
         try:
             os.unlink(temp_path)
-        except:
-            pass
+            logger.info(f'🗑️ Временный файл {temp_path} удален')
+        except Exception as cleanup_error:
+            logger.warning(f'⚠️ Не удалось удалить временный файл {temp_path}: {cleanup_error}')
         
         if success:
+            logger.info(f'✅ Транскрипция успешна для пользователя {user_id}, длина текста: {len(text)} символов')
+            
             # Format response
             response_parts = []
             response_parts.append("🎤 **РАСШИФРОВКА ГОЛОСОВОГО СООБЩЕНИЯ:**")
@@ -749,13 +794,16 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
                 response_parts.append(f"• Символов в тексте: {stats.get('text_length', 0)}")
                 response_parts.append(f"• Токенов распознано: {stats.get('tokens_count', 0)}")
                 response_parts.append(f"• Средняя уверенность: {stats.get('confidence_avg', 0):.2f}")
+                response_parts.append(f"• Время обработки: {processing_time:.2f} сек")
             
             full_response = "\n".join(response_parts)
             
             # Send response
             if len(full_response) <= 4000:
+                logger.info(f'📤 Отправляю результат транскрипции пользователю {user_id} (текст)')
                 await processing_msg.edit_text(full_response, parse_mode='Markdown')
             else:
+                logger.info(f'📄 Результат слишком длинный, отправляю файлом пользователю {user_id}')
                 await processing_msg.edit_text("📄 Расшифровка слишком длинная, отправляю файлом.")
                 file = BytesIO(full_response.encode('utf-8'))
                 # Создаем информативное имя файла для голосового сообщения
@@ -763,6 +811,7 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
                 file.name = f'voice_transcription_{user_id}_{timestamp}.txt'
                 await update.message.reply_document(InputFile(file))
         else:
+<<<<<<< HEAD
             log_and_notify_error(
                 error=Exception(text),
                 context="voice_transcription_failed",
@@ -780,6 +829,17 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
             additional_info={"duration": voice.duration, "file_id": voice.file_id}
         )
         await processing_msg.edit_text(f'❌ Ошибка при обработке голосового сообщения: {str(e)}')
+=======
+            logger.error(f'❌ Транскрипция неудачна для пользователя {user_id}: {text}')
+            await processing_msg.edit_text(f'❌ {text}')
+            
+    except Exception as e:
+        logger.error(f'❌ Ошибка при обработке голосового сообщения для пользователя {user_id}: {e}', exc_info=True)
+        try:
+            await processing_msg.edit_text(f'❌ Ошибка при обработке голосового сообщения: {str(e)}')
+        except Exception as edit_error:
+            logger.error(f'❌ Не удалось отправить сообщение об ошибке пользователю {user_id}: {edit_error}')
+>>>>>>> origin/cursor/investigate-long-voice-message-processing-failure-2dbf
 
 async def language_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -994,6 +1054,7 @@ async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def voice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает callback'и для голосовых сообщений"""
     query = update.callback_query
+<<<<<<< HEAD
     await query.answer()
     
     if query.data == 'voice_cancel':
@@ -1011,21 +1072,69 @@ async def voice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text('🔄 Обрабатываю длинное голосовое сообщение...')
         # Пока просто отменяем, так как file_id не передается
         await query.edit_message_text('❌ Функция временно недоступна. Отправьте голосовое сообщение заново.')
+=======
+    user_id = update.effective_user.id
+    
+    logger.info(f'📞 Получен callback для голосового сообщения: {query.data} от пользователя {user_id}')
+    
+    try:
+        await query.answer()
+        
+        if query.data == 'voice_cancel':
+            logger.info(f'❌ Пользователь {user_id} отменил обработку голосового сообщения')
+            await query.edit_message_text('❌ Обработка голосового сообщения отменена.')
+            return
+        
+        elif query.data.startswith('voice_force_'):
+            file_id = query.data.replace('voice_force_', '')
+            logger.info(f'⚠️ Пользователь {user_id} запросил принудительную обработку голосового сообщения: {file_id}')
+            logger.info(f'🔄 Начинаю принудительную обработку длинного голосового сообщения для пользователя {user_id}')
+            await query.edit_message_text('⚠️ **Попытка обработки длинного сообщения**\n\n🔄 Обрабатываю... Это может занять до 5 минут.')
+            await process_voice_message_by_file_id(update, context, file_id, force=True)
+        
+        elif query.data.startswith('voice_continue_'):
+            file_id = query.data.replace('voice_continue_', '')
+            logger.info(f'✅ Пользователь {user_id} подтвердил обработку длинного голосового сообщения: {file_id}')
+            logger.info(f'🔄 Начинаю обработку длинного голосового сообщения для пользователя {user_id}')
+            await query.edit_message_text('🔄 Обрабатываю длинное голосовое сообщение...')
+            await process_voice_message_by_file_id(update, context, file_id, force=False)
+        
+        else:
+            logger.warning(f'⚠️ Неизвестный callback для голосового сообщения: {query.data} от пользователя {user_id}')
+            await query.edit_message_text('❌ Неизвестная команда.')
+            
+    except Exception as e:
+        logger.error(f'❌ Ошибка в voice_callback для пользователя {user_id}: {e}', exc_info=True)
+        try:
+            await query.edit_message_text('❌ Произошла ошибка при обработке команды.')
+        except:
+            pass
+>>>>>>> origin/cursor/investigate-long-voice-message-processing-failure-2dbf
 
 async def process_voice_message_by_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE, file_id: str, force: bool = False):
     """Обрабатывает голосовое сообщение по file_id"""
     user_id = update.effective_user.id
     
+<<<<<<< HEAD
+=======
+    logger.info(f'🎬 Начинаю обработку голосового сообщения для пользователя {user_id}, file_id: {file_id}, force: {force}')
+    
+>>>>>>> origin/cursor/investigate-long-voice-message-processing-failure-2dbf
     try:
         # Download voice file
+        logger.info(f'📥 Загружаю голосовой файл {file_id} для пользователя {user_id}')
         file = await context.bot.get_file(file_id)
+        logger.info(f'✅ Файл получен, размер: {file.file_size} байт')
         
         # Create temporary file
         with tempfile.NamedTemporaryFile(suffix='.ogg', delete=False) as temp_file:
             temp_path = temp_file.name
         
+        logger.info(f'💾 Сохраняю файл во временную директорию: {temp_path}')
+        
         # Download the file
         await file.download_to_drive(temp_path)
+        logger.info(f'✅ Файл успешно загружен в {temp_path}')
         
         # Create a mock voice object for the transcriber
         class MockVoice:
@@ -1034,17 +1143,25 @@ async def process_voice_message_by_file_id(update: Update, context: ContextTypes
                 self.duration = duration
         
         voice = MockVoice(file_id, duration=300 if force else 180)
+        logger.info(f'🎤 Начинаю транскрипцию голосового сообщения (длительность: {voice.duration} сек)')
         
         # Transcribe voice message
+        start_time = time.time()
         success, text, stats = await voice_transcriber.transcribe_voice_message(voice, temp_path)
+        processing_time = time.time() - start_time
+        
+        logger.info(f'⏱️ Транскрипция завершена за {processing_time:.2f} секунд, успех: {success}')
         
         # Clean up temporary file
         try:
             os.unlink(temp_path)
-        except:
-            pass
+            logger.info(f'🗑️ Временный файл {temp_path} удален')
+        except Exception as cleanup_error:
+            logger.warning(f'⚠️ Не удалось удалить временный файл {temp_path}: {cleanup_error}')
         
         if success:
+            logger.info(f'✅ Транскрипция успешна для пользователя {user_id}, длина текста: {len(text)} символов')
+            
             # Format response
             response_parts = []
             response_parts.append("🎤 **РАСШИФРОВКА ГОЛОСОВОГО СООБЩЕНИЯ:**")
@@ -1059,13 +1176,16 @@ async def process_voice_message_by_file_id(update: Update, context: ContextTypes
                 response_parts.append(f"• Символов в тексте: {stats.get('text_length', 0)}")
                 response_parts.append(f"• Токенов распознано: {stats.get('tokens_count', 0)}")
                 response_parts.append(f"• Средняя уверенность: {stats.get('confidence_avg', 0):.2f}")
+                response_parts.append(f"• Время обработки: {processing_time:.2f} сек")
             
             full_response = "\n".join(response_parts)
             
             # Send response
             if len(full_response) <= 4000:
+                logger.info(f'📤 Отправляю результат транскрипции пользователю {user_id} (текст)')
                 await update.callback_query.edit_message_text(full_response, parse_mode='Markdown')
             else:
+                logger.info(f'📄 Результат слишком длинный, отправляю файлом пользователю {user_id}')
                 await update.callback_query.edit_message_text("📄 Расшифровка слишком длинная, отправляю файлом.")
                 file = BytesIO(full_response.encode('utf-8'))
                 # Создаем информативное имя файла для голосового сообщения
@@ -1073,6 +1193,7 @@ async def process_voice_message_by_file_id(update: Update, context: ContextTypes
                 file.name = f'voice_transcription_{user_id}_{timestamp}.txt'
                 await update.callback_query.message.reply_document(InputFile(file))
         else:
+<<<<<<< HEAD
             log_and_notify_error(
                 error=Exception(text),
                 context="voice_transcription_by_file_id_failed",
@@ -1090,6 +1211,17 @@ async def process_voice_message_by_file_id(update: Update, context: ContextTypes
             additional_info={"file_id": file_id, "force": force}
         )
         await update.callback_query.edit_message_text(f'❌ Ошибка при обработке голосового сообщения: {str(e)}')
+=======
+            logger.error(f'❌ Транскрипция неудачна для пользователя {user_id}: {text}')
+            await update.callback_query.edit_message_text(f'❌ {text}')
+            
+    except Exception as e:
+        logger.error(f'❌ Ошибка при обработке голосового сообщения по file_id {file_id} для пользователя {user_id}: {e}', exc_info=True)
+        try:
+            await update.callback_query.edit_message_text(f'❌ Ошибка при обработке голосового сообщения: {str(e)}')
+        except Exception as edit_error:
+            logger.error(f'❌ Не удалось отправить сообщение об ошибке пользователю {user_id}: {edit_error}')
+>>>>>>> origin/cursor/investigate-long-voice-message-processing-failure-2dbf
 
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
