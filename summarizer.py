@@ -3,10 +3,25 @@ import requests
 import re
 import time
 import asyncio
+import random
+import logging
 from typing import List, Optional, Tuple
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Настройка логгера для суммаризации
+summarization_logger = logging.getLogger('summarization')
+summarization_logger.setLevel(logging.INFO)
+
+# Создаем файловый обработчик для лога суммаризации
+if not summarization_logger.handlers:
+    # Убеждаемся, что папка logs существует
+    os.makedirs('logs', exist_ok=True)
+    summarization_handler = logging.FileHandler('logs/summarization.log', encoding='utf-8-sig')
+    summarization_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    summarization_handler.setFormatter(summarization_formatter)
+    summarization_logger.addHandler(summarization_handler)
 
 class TextSummarizer:
     """Класс для суммаризации текста через OpenRouter API"""
@@ -37,6 +52,28 @@ class TextSummarizer:
             "X-Title": "Telegram Subs-bot"
         }
     
+    def get_random_model_index(self) -> int:
+        """Возвращает случайный индекс модели для суммаризации"""
+        return random.randint(0, len(self.models) - 1)
+    
+    def log_summarization_result(self, success: bool, model_name: str, text_length: int, 
+                                summary_length: int, chunks: int, error: str = None):
+        """Логирует результат суммаризации"""
+        if success:
+            summarization_logger.info(
+                f"✅ Суммаризация УСПЕШНА - Модель: {model_name}, "
+                f"Исходный текст: {text_length} символов, "
+                f"Суммаризация: {summary_length} символов, "
+                f"Частей: {chunks}"
+            )
+        else:
+            summarization_logger.error(
+                f"❌ Суммаризация НЕУСПЕШНА - Модель: {model_name}, "
+                f"Исходный текст: {text_length} символов, "
+                f"Ошибка: {error}, "
+                f"Частей: {chunks}"
+            )
+    
     def detect_language(self, text: str) -> str:
         """
         Определяет язык текста на основе простых эвристик
@@ -61,20 +98,23 @@ class TextSummarizer:
         else:
             return 'other'
     
-    async def translate_to_russian(self, text: str, source_lang: str = None, model_index: int = 0) -> str:
+    async def translate_to_russian(self, text: str, source_lang: str = None, model_index: int = None) -> str:
         """
         Переводит текст на русский язык
         Args:
             text: текст для перевода
             source_lang: исходный язык (если известен)
-            model_index: индекс модели для перевода
+            model_index: индекс модели для перевода (если None, выбирается случайно)
         Returns:
             переведенный текст или исходный текст в случае ошибки
         """
         if not self.api_key:
             return text
         
-        if model_index >= len(self.models):
+        # Если индекс модели не указан, выбираем случайно
+        if model_index is None:
+            model_index = self.get_random_model_index()
+        elif model_index >= len(self.models):
             model_index = 0
         
         model_name, model_id = self.models[model_index]
@@ -94,9 +134,33 @@ class TextSummarizer:
         
         try:
             result = await self._make_request(model_id, messages)
-            return result if result else text
+            if result and not result.startswith("❌"):
+                # Успешный перевод
+                summarization_logger.info(
+                    f"✅ Перевод УСПЕШЕН - Модель: {model_name}, "
+                    f"Исходный язык: {source_lang or 'unknown'}, "
+                    f"Исходный текст: {len(text)} символов, "
+                    f"Перевод: {len(result)} символов"
+                )
+                return result
+            else:
+                # Неуспешный перевод
+                summarization_logger.error(
+                    f"❌ Перевод НЕУСПЕШЕН - Модель: {model_name}, "
+                    f"Исходный язык: {source_lang or 'unknown'}, "
+                    f"Исходный текст: {len(text)} символов, "
+                    f"Ошибка: {result or 'Неизвестная ошибка'}"
+                )
+                return text
         except Exception as e:
-            print(f"Ошибка перевода: {e}")
+            error_msg = f"Ошибка перевода: {e}"
+            summarization_logger.error(
+                f"❌ Перевод НЕУСПЕШЕН - Модель: {model_name}, "
+                f"Исходный язык: {source_lang or 'unknown'}, "
+                f"Исходный текст: {len(text)} символов, "
+                f"Исключение: {error_msg}"
+            )
+            print(error_msg)
             return text
     
     def split_text(self, text: str, max_len: int = None) -> List[str]:
@@ -155,17 +219,27 @@ class TextSummarizer:
         
         return None
     
-    async def summarize_text(self, text: str, model_index: int = 0, custom_prompt: str = None) -> Tuple[str, dict]:
+    async def summarize_text(self, text: str, model_index: int = None, custom_prompt: str = None) -> Tuple[str, dict]:
         """
         Суммаризирует текст по частям, затем создает итоговую суммаризацию
+        
+        Args:
+            text: текст для суммаризации
+            model_index: индекс модели (если None, выбирается случайно)
+            custom_prompt: пользовательский промпт
         
         Returns:
             Tuple[str, dict]: (итоговая суммаризация, статистика)
         """
         if not self.api_key:
-            return "❌ Не настроен OPENROUTER_API_KEY", {}
+            error_msg = "❌ Не настроен OPENROUTER_API_KEY"
+            self.log_summarization_result(False, "none", len(text), 0, 0, error_msg)
+            return error_msg, {}
         
-        if model_index >= len(self.models):
+        # Если индекс модели не указан, выбираем случайно
+        if model_index is None:
+            model_index = self.get_random_model_index()
+        elif model_index >= len(self.models):
             model_index = 0
         
         model_name, model_id = self.models[model_index]
@@ -178,7 +252,9 @@ class TextSummarizer:
         chunks = self.split_text(text)
         
         if not chunks:
-            return "❌ Пустой текст для суммаризации", {}
+            error_msg = "❌ Пустой текст для суммаризации"
+            self.log_summarization_result(False, model_name, len(text), 0, 0, error_msg)
+            return error_msg, {}
         
         # Если текст короткий - обрабатываем сразу
         if len(chunks) == 1 and len(text) < 2000:
@@ -187,17 +263,34 @@ class TextSummarizer:
                 {"role": "user", "content": text}
             ]
             result = await self._make_request(model_id, messages)
-            stats = {
-                "model": model_name,
-                "chunks": 1,
-                "original_length": len(text),
-                "summary_length": len(result) if result else 0,
-                "source_language": source_language
-            }
-            return result or "❌ Не удалось создать суммаризацию", stats
+            
+            if result and not result.startswith("❌"):
+                # Успешная суммаризация
+                stats = {
+                    "model": model_name,
+                    "chunks": 1,
+                    "original_length": len(text),
+                    "summary_length": len(result),
+                    "source_language": source_language
+                }
+                self.log_summarization_result(True, model_name, len(text), len(result), 1)
+                return result, stats
+            else:
+                # Неуспешная суммаризация
+                error_msg = result or "❌ Не удалось создать суммаризацию"
+                stats = {
+                    "model": model_name,
+                    "chunks": 1,
+                    "original_length": len(text),
+                    "summary_length": 0,
+                    "source_language": source_language
+                }
+                self.log_summarization_result(False, model_name, len(text), 0, 1, error_msg)
+                return error_msg, stats
         
         # Обрабатываем по частям
         chunk_summaries = []
+        successful_chunks = 0
         
         for i, chunk in enumerate(chunks):
             messages = [
@@ -207,15 +300,18 @@ class TextSummarizer:
             
             summary = await self._make_request(model_id, messages)
             
-            if summary:
+            if summary and not summary.startswith("❌"):
                 chunk_summaries.append(summary)
+                successful_chunks += 1
             
             # Небольшая пауза между запросами
             if i < len(chunks) - 1:
                 await asyncio.sleep(2)
         
         if not chunk_summaries:
-            return "❌ Не удалось создать суммаризацию ни одной части", {}
+            error_msg = "❌ Не удалось создать суммаризацию ни одной части"
+            self.log_summarization_result(False, model_name, len(text), 0, len(chunks), error_msg)
+            return error_msg, {}
         
         # Создаем итоговую суммаризацию
         final_prompt = "Создай единую связную суммаризацию на основе этих фрагментов:"
@@ -228,16 +324,31 @@ class TextSummarizer:
         
         final_summary = await self._make_request(model_id, final_messages)
         
-        stats = {
-            "model": model_name,
-            "chunks": len(chunks),
-            "original_length": len(text),
-            "summary_length": len(final_summary) if final_summary else 0,
-            "processed_chunks": len(chunk_summaries),
-            "source_language": source_language
-        }
-        
-        return final_summary or "❌ Не удалось создать итоговую суммаризацию", stats
+        if final_summary and not final_summary.startswith("❌"):
+            # Успешная итоговая суммаризация
+            stats = {
+                "model": model_name,
+                "chunks": len(chunks),
+                "original_length": len(text),
+                "summary_length": len(final_summary),
+                "processed_chunks": successful_chunks,
+                "source_language": source_language
+            }
+            self.log_summarization_result(True, model_name, len(text), len(final_summary), len(chunks))
+            return final_summary, stats
+        else:
+            # Неуспешная итоговая суммаризация
+            error_msg = final_summary or "❌ Не удалось создать итоговую суммаризацию"
+            stats = {
+                "model": model_name,
+                "chunks": len(chunks),
+                "original_length": len(text),
+                "summary_length": 0,
+                "processed_chunks": successful_chunks,
+                "source_language": source_language
+            }
+            self.log_summarization_result(False, model_name, len(text), 0, len(chunks), error_msg)
+            return error_msg, stats
     
     def get_available_models(self) -> List[str]:
         """Возвращает список доступных моделей"""

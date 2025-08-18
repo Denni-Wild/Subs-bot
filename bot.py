@@ -936,7 +936,8 @@ async def process_request(query, context):
         await query.edit_message_text('🤖 Создаю ИИ-суммаризацию... Это может занять до 2-3 минут.')
         
         try:
-            summary, stats = await summarizer.summarize_text(raw_subtitles, model_index)
+            # Используем случайный выбор модели, если не указан конкретный индекс
+            summary, stats = await summarizer.summarize_text(raw_subtitles, model_index if model_index is not None else None)
             logger.info(f"✅ ИИ-суммаризация завершена успешно")
             
             # Формируем ответ
@@ -962,7 +963,8 @@ async def process_request(query, context):
                 await query.edit_message_text('🌍 Создаю перевод на русский язык...')
                 
                 try:
-                    translation = await summarizer.translate_to_russian(summary, source_language, model_index)
+                    # Используем случайный выбор модели для перевода
+                    translation = await summarizer.translate_to_russian(summary, source_language, None)
                     response_parts.append("\n🇷🇺 **ПЕРЕВОД НА РУССКИЙ:**")
                     response_parts.append(translation)
                     logger.info(f"✅ Перевод завершен успешно")
