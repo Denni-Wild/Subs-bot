@@ -1,0 +1,226 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mind Map - Subs-bot</title>
+    
+    <!-- Markmap CSS и JS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/markmap-toolbar@0.3.0/dist/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/markmap-toolbar@0.3.0/dist/index.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.3.0/dist/index.min.js"></script>
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .mindmap-container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        #mindmap {
+            width: 100%;
+            height: 80vh;
+            min-height: 600px;
+        }
+        
+        .controls {
+            padding: 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 25px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            color: white;
+            opacity: 0.8;
+        }
+        
+        @media (max-width: 768px) {
+            .header h1 { font-size: 2rem; }
+            .controls { flex-direction: column; align-items: center; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧠 Mind Map - Subs-bot</h1>
+            <p>Интерактивная карта памяти, сгенерированная автоматически</p>
+        </div>
+        
+        <div class="mindmap-container">
+            <div class="controls">
+                <button class="btn" onclick="zoomIn()">🔍 Увеличить</button>
+                <button class="btn" onclick="zoomOut()">🔍 Уменьшить</button>
+                <button class="btn" onclick="resetView()">🏠 Сброс</button>
+                <button class="btn" onclick="downloadSVG()">💾 Скачать SVG</button>
+                <button class="btn" onclick="showMarkdown()">📝 Показать Markdown</button>
+            </div>
+            
+            <div id="mindmap"></div>
+        </div>
+        
+        <div class="footer">
+            <p>Создано с помощью Subs-bot Mind Map Generator</p>
+        </div>
+    </div>
+    
+    <script>
+        // Markdown контент
+        const markdown = `# Общие темы
+
+*Автоматически сгенерированная карта памяти*
+
+## Общие темы
+
+💡 Автоматизация процессов
+💡 Анализ больших данных
+💡 Автоматическая генерация субтитров
+💡 Распознавание речи
+💡 Автономные транспортные средства
+💡 Распознавание объектов
+💡 Планирование маршрутов
+
+## Аудио обработка
+
+🎵 Анализ аудио контента
+🎵 Голосовые помощники
+🎵 Обработка аудио
+
+## ИИ и ML
+
+🤖 Искусственный интеллект и машинное обучение
+
+## Видео контент
+
+🎥 YouTube платформа
+
+---
+**Сгенерировано**: 4 основных тем
+**Всего идей**: 12
+**Главная тема**: Общие темы
+`;
+        
+        // Инициализация Markmap
+        let mm;
+        
+        async function initMarkmap() {
+            try {
+                const { Markmap, loadCSS, loadJS } = await import('https://cdn.jsdelivr.net/npm/markmap-view@0.3.0/dist/index.min.js');
+                
+                // Создаем Markmap
+                mm = Markmap.create('#mindmap', null, markdown);
+                
+                // Добавляем тулбар
+                const toolbar = new markmap.toolbar.Toolbar();
+                toolbar.attach(mm);
+                
+            } catch (error) {
+                console.error('Ошибка инициализации Markmap:', error);
+                document.getElementById('mindmap').innerHTML = 
+                    '<div style="padding: 40px; text-align: center; color: #666;">' +
+                    '<h3>Ошибка загрузки карты</h3>' +
+                    '<p>Попробуйте обновить страницу</p>' +
+                    '</div>';
+            }
+        }
+        
+        // Функции управления
+        function zoomIn() {
+            if (mm) mm.zoomIn();
+        }
+        
+        function zoomOut() {
+            if (mm) mm.zoomOut();
+        }
+        
+        function resetView() {
+            if (mm) mm.fit();
+        }
+        
+        function downloadSVG() {
+            if (mm) {
+                const svg = document.querySelector('#mindmap svg');
+                const serializer = new XMLSerializer();
+                const svgString = serializer.serializeToString(svg);
+                const blob = new Blob([svgString], {type: 'image/svg+xml'});
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'mindmap.svg';
+                a.click();
+                URL.revokeObjectURL(url);
+            }
+        }
+        
+        function showMarkdown() {
+            const markdownWindow = window.open('', '_blank');
+            markdownWindow.document.write(`
+                <html>
+                <head><title>Markdown - Mind Map</title></head>
+                <body style="font-family: monospace; padding: 20px; background: #f5f5f5;">
+                    <h2>Markdown код:</h2>
+                    <pre style="background: white; padding: 15px; border-radius: 5px; overflow-x: auto;">${markdown}</pre>
+                </body>
+                </html>
+            `);
+        }
+        
+        // Инициализация при загрузке страницы
+        document.addEventListener('DOMContentLoaded', initMarkmap);
+    </script>
+</body>
+</html>

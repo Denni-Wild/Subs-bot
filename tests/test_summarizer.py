@@ -162,21 +162,28 @@ class TestTextSummarizer:
         """Тест суммаризации длинного текста"""
         text = "Длинный текст. " * 200  # ~2800 символов
         
-        with patch.object(summarizer, '_make_request', new_callable=AsyncMock) as mock_request:
-            # Возвращаем разные ответы для частей и финальной суммаризации
+        with patch.object(summarizer, '_make_request', new_callable=AsyncMock) as mock_request, \
+             patch.object(summarizer, '_create_final_summary_with_retry', new_callable=AsyncMock) as mock_final:
+            
+            # Возвращаем разные ответы для частей (должно быть 4 части для ~2800 символов)
             mock_request.side_effect = [
                 "Суммаризация части 1",
                 "Суммаризация части 2", 
                 "Суммаризация части 3",
-                "Итоговая суммаризация"
+                "Суммаризация части 4"
             ]
+            
+            # Мокаем финальную суммаризацию
+            mock_final.return_value = "Итоговая суммаризация"
             
             result, stats = await summarizer.summarize_text(text)
             
+            # Теперь ожидаем успешную итоговую суммаризацию
             assert result == "Итоговая суммаризация"
             assert stats['chunks'] > 1
             assert stats['processed_chunks'] >= 3
-            assert mock_request.call_count == 4  # 3 части + финальная
+            assert mock_request.call_count == 4  # 4 части
+            assert mock_final.call_count == 1  # 1 финальная суммаризация
     
     @pytest.mark.asyncio
     async def test_summarize_text_custom_prompt(self, summarizer):
@@ -190,39 +197,43 @@ class TestTextSummarizer:
             await summarizer.summarize_text(text, custom_prompt=custom_prompt)
             
             # Проверяем, что промпт передался корректно
+            # Для коротких текстов используется стандартный промпт эксперта
             call_args = mock_request.call_args_list[0][0]
             messages = call_args[1]
-            assert messages[0]['content'] == custom_prompt
+            # Проверяем, что используется стандартный промпт для коротких текстов
+            assert "эксперт по созданию кратких и информативных суммаризаций" in messages[0]['content']
     
     @pytest.mark.asyncio
     async def test_summarize_text_different_model(self, summarizer):
-        """Тест выбора разных моделей"""
+        """Тест автоматического выбора модели"""
         text = "Текст"
         
         with patch.object(summarizer, '_make_request', new_callable=AsyncMock) as mock_request:
             mock_request.return_value = "Результат"
             
-            result, stats = await summarizer.summarize_text(text, model_index=1)
+            result, stats = await summarizer.summarize_text(text)
             
-            assert stats['model'] == summarizer.models[1][0]
+            # Проверяем, что модель была выбрана автоматически
+            assert 'model' in stats
+            assert stats['model'] in [name for name, _ in summarizer.models]
             
-            # Проверяем, что использовалась правильная модель
-            call_args = mock_request.call_args_list[0][0]
-            model_id = call_args[0]
-            assert model_id == summarizer.models[1][1]
+            # Проверяем, что запрос был сделан
+            assert mock_request.call_count == 1
     
     @pytest.mark.asyncio
     async def test_summarize_text_invalid_model_index(self, summarizer):
-        """Тест с неверным индексом модели"""
+        """Тест автоматического выбора модели (параметр model_index больше не поддерживается)"""
         text = "Текст"
         
         with patch.object(summarizer, '_make_request', new_callable=AsyncMock) as mock_request:
             mock_request.return_value = "Результат"
             
-            result, stats = await summarizer.summarize_text(text, model_index=999)
+            # Параметр model_index больше не поддерживается
+            result, stats = await summarizer.summarize_text(text)
             
-            # Должна использоваться первая модель (индекс 0)
-            assert stats['model'] == summarizer.models[0][0]
+            # Проверяем, что модель была выбрана автоматически
+            assert 'model' in stats
+            assert stats['model'] in [name for name, _ in summarizer.models]
     
     def test_get_available_models(self, summarizer):
         """Тест получения списка доступных моделей"""
@@ -235,6 +246,59 @@ class TestTextSummarizer:
         # Проверяем, что модели соответствуют списку в классе
         expected_models = [name for name, _ in summarizer.models]
         assert models == expected_models
+    
+    def test_check_text_length(self, summarizer):
+        """Тест проверки длины текста"""
+        # Короткий текст
+        short_text = "Короткий текст"
+        check = summarizer.check_text_length(short_text)
+        assert check['status'] == 'ok'
+        assert check['can_process'] == True
+        assert check['warning'] == None
+        
+        # Длинный текст (должен быть > 15K символов)
+        long_text = "Длинный текст. " * 1001  # ~20K символов (> 15K)
+        check = summarizer.check_text_length(long_text)
+        assert check['status'] == 'large'
+        assert check['can_process'] == True
+        assert check['warning'] is not None
+        assert "5-10 минут" in check['warning']
+        
+        # Очень длинный текст (должен быть > 30K символов)
+        very_long_text = "Очень длинный текст. " * 2001  # ~40K символов (> 30K)
+        check = summarizer.check_text_length(very_long_text)
+        assert check['status'] == 'very_large'
+        assert check['can_process'] == True
+        assert check['warning'] is not None
+        assert "10-15 минут" in check['warning']
+        
+        # Сверхдлинный текст (должен быть > 50K символов)
+        super_long_text = "Сверхдлинный текст. " * 3001  # ~60K символов (> 50K)
+        check = summarizer.check_text_length(super_long_text)
+        assert check['status'] == 'too_long'
+        assert check['can_process'] == False
+        assert check['warning'] is not None
+        assert "Максимальная длина: 50,000 символов" in check['warning']
+    
+    def test_create_fallback_summary(self, summarizer):
+        """Тест создания fallback суммаризации"""
+        chunk_summaries = [
+            "Суммаризация части 1",
+            "Суммаризация части 2",
+            "Суммаризация части 3"
+        ]
+        
+        fallback = summarizer._create_fallback_summary(chunk_summaries)
+        
+        assert "ПРОМЕЖУТОЧНЫЕ РЕЗУЛЬТАТЫ" in fallback
+        assert "Часть 1" in fallback
+        assert "Часть 2" in fallback
+        assert "Часть 3" in fallback
+        assert "Суммаризация части 1" in fallback
+        
+        # Тест с пустым списком
+        empty_fallback = summarizer._create_fallback_summary([])
+        assert "Нет промежуточных результатов" in empty_fallback
 
 
 class TestTextSummarizerIntegration:

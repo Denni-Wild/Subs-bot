@@ -21,6 +21,7 @@ if not TELEGRAM_BOT_TOKEN:
 commands = [
     {"command": "start", "description": "🚀 Начать работу с ботом"},
     {"command": "help", "description": "📚 Подробная справка по использованию"},
+    {"command": "first_time", "description": "🎯 Первый раз? Узнайте как начать"},
     {"command": "about", "description": "🤖 Информация о боте"},
     {"command": "subs", "description": "📺 Получить субтитры с YouTube"},
     {"command": "voice", "description": "🎤 Расшифровать голосовое сообщение"},

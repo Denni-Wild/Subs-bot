@@ -1,0 +1,16 @@
+# Mind Map Generator - Переменные окружения
+# Скопируйте этот файл в .env и заполните реальными значениями
+
+# OpenRouter API ключ для LLM интеграции
+# Получите на https://openrouter.ai/
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+
+# Telegram Bot Token (для будущей интеграции)
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+
+# Soniox API ключ (для транскрипции аудио)
+SONIOX_API_KEY=your_soniox_api_key_here
+
+# Другие API ключи по необходимости
+# OPENAI_API_KEY=your_openai_key_here
+# ANTHROPIC_API_KEY=your_anthropic_key_here

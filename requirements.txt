@@ -1,22 +1,30 @@
-# Core bot dependencies
-python-telegram-bot>=22.0
-youtube-transcript-api>=1.0
-python-dotenv>=1.0
-requests>=2.25
+# Основные зависимости
+python-telegram-bot==20.7
+asyncio
+aiohttp
+python-dotenv
 
-# Audio processing dependencies
-pydub>=0.25
-ffmpeg-python>=0.2
+# AI и суммаризация
+openai
+anthropic
 
-# Voice message transcription dependencies
-websockets>=10.0
+# Аудио обработка
+pydub
+ffmpeg-python
 
-# Testing dependencies
-pytest>=7.0
-pytest-asyncio>=0.21
-pytest-mock>=3.10
-responses>=0.23
-aioresponses>=0.7
+# Логирование и утилиты
+colorama
+tqdm
 
-# Note: asyncio is part of Python standard library since Python 3.7
-# No need to install it separately 
+# Новые зависимости для Mind Map
+# mermaid-cli для рендеринга диаграмм (устанавливается через npm)
+# markmap-lib для интерактивных карт (подключается через CDN)
+
+# Тестирование
+pytest
+pytest-asyncio
+responses  # для мокирования HTTP запросов в тестах
+
+# Дополнительные утилиты
+requests
+Pillow  # для работы с изображениями 

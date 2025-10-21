@@ -5,7 +5,7 @@ import time
 import asyncio
 import random
 import logging
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -16,7 +16,7 @@ summarization_logger.setLevel(logging.INFO)
 
 # Создаем файловый обработчик для лога суммаризации
 if not summarization_logger.handlers:
-    # Убеждаемся, что папка logs существует
+    # Убеждаемся что папка logs существует
     os.makedirs('logs', exist_ok=True)
     summarization_handler = logging.FileHandler('logs/summarization.log', encoding='utf-8-sig')
     summarization_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
@@ -24,7 +24,7 @@ if not summarization_logger.handlers:
     summarization_logger.addHandler(summarization_handler)
 
 class TextSummarizer:
-    """Класс для суммаризации текста через OpenRouter API"""
+    """Класс для суммаризации текста через OpenRouter API с автоматическим выбором модели"""
     
     def __init__(self):
         self.api_key = os.getenv('OPENROUTER_API_KEY')
@@ -32,6 +32,11 @@ class TextSummarizer:
         self.max_retries = 3
         self.retry_delay = 5
         self.rate_limit_delay = 60
+        
+        # Лимиты для текстов разной длины
+        self.warning_threshold = 15000  # Предупреждение для текстов > 15K символов
+        self.max_text_length = 50000    # Максимальная длина для обработки
+        self.large_text_threshold = 30000  # Порог для "больших" текстов
         
         # Список бесплатных моделей OpenRouter
         self.models = [
@@ -45,6 +50,9 @@ class TextSummarizer:
             ("deepseek_r1_0528", "deepseek/deepseek-r1-0528:free"),
         ]
         
+        # История использованных моделей для текущей сессии
+        self.used_models = set()
+        
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -52,19 +60,66 @@ class TextSummarizer:
             "X-Title": "Telegram Subs-bot"
         }
     
-    def get_random_model_index(self) -> int:
-        """Возвращает случайный индекс модели для суммаризации"""
-        return random.randint(0, len(self.models) - 1)
+    def check_text_length(self, text: str) -> dict:
+        """
+        Проверяет длину текста и возвращает рекомендации
+        
+        Args:
+            text: текст для проверки
+            
+        Returns:
+            dict: информация о длине текста и рекомендации
+        """
+        text_length = len(text)
+        
+        result = {
+            "length": text_length,
+            "chunks": len(self.split_text(text)),
+            "status": "ok",
+            "warning": None,
+            "can_process": True
+        }
+        
+        if text_length > self.max_text_length:
+            result["status"] = "too_long"
+            result["warning"] = f"❌ Текст слишком длинный ({text_length:,} символов). Максимальная длина: {self.max_text_length:,} символов."
+            result["can_process"] = False
+        elif text_length > self.large_text_threshold:
+            result["status"] = "very_large"
+            result["warning"] = f"⚠️ Текст очень длинный ({text_length:,} символов, {result['chunks']} частей). Обработка может занять 10-15 минут."
+        elif text_length > self.warning_threshold:
+            result["status"] = "large"
+            result["warning"] = f"📝 Текст длинный ({text_length:,} символов, {result['chunks']} частей). Обработка займет 5-10 минут."
+        
+        return result
+    
+    def get_available_model_index(self) -> int:
+        """Возвращает индекс доступной модели, избегая уже использованных"""
+        available_models = [i for i in range(len(self.models)) if i not in self.used_models]
+        
+        if not available_models:
+            # Если все модели использованы, сбрасываем историю
+            self.used_models.clear()
+            available_models = list(range(len(self.models)))
+        
+        # Выбираем случайную доступную модель
+        selected_index = random.choice(available_models)
+        self.used_models.add(selected_index)
+        
+        summarization_logger.info(f"🎯 Выбрана модель: {self.models[selected_index][0]} (индекс: {selected_index})")
+        return selected_index
     
     def log_summarization_result(self, success: bool, model_name: str, text_length: int, 
-                                summary_length: int, chunks: int, error: str = None):
-        """Логирует результат суммаризации"""
+                                summary_length: int, chunks: int, error: str = None, 
+                                user_satisfied: bool = None):
+        """Логирует результат суммаризации с информацией об удовлетворенности пользователя"""
         if success:
+            satisfaction_info = f", Пользователь доволен: {user_satisfied}" if user_satisfied is not None else ""
             summarization_logger.info(
                 f"✅ Суммаризация УСПЕШНА - Модель: {model_name}, "
                 f"Исходный текст: {text_length} символов, "
                 f"Суммаризация: {summary_length} символов, "
-                f"Частей: {chunks}"
+                f"Частей: {chunks}{satisfaction_info}"
             )
         else:
             summarization_logger.error(
@@ -73,6 +128,20 @@ class TextSummarizer:
                 f"Ошибка: {error}, "
                 f"Частей: {chunks}"
             )
+    
+    def log_user_feedback(self, model_name: str, text_length: int, summary_length: int, 
+                          user_satisfied: bool, feedback_reason: str = None):
+        """Логирует обратную связь пользователя"""
+        feedback_text = f"Пользователь {'доволен' if user_satisfied else 'не доволен'}"
+        if feedback_reason:
+            feedback_text += f" - Причина: {feedback_reason}"
+        
+        summarization_logger.info(
+            f"👤 Обратная связь - Модель: {model_name}, "
+            f"Исходный текст: {text_length} символов, "
+            f"Суммаризация: {summary_length} символов, "
+            f"{feedback_text}"
+        )
     
     def detect_language(self, text: str) -> str:
         """
@@ -98,25 +167,20 @@ class TextSummarizer:
         else:
             return 'other'
     
-    async def translate_to_russian(self, text: str, source_lang: str = None, model_index: int = None) -> str:
+    async def translate_to_russian(self, text: str, source_lang: str = None) -> str:
         """
-        Переводит текст на русский язык
+        Переводит текст на русский язык с автоматическим выбором модели
         Args:
             text: текст для перевода
             source_lang: исходный язык (если известен)
-            model_index: индекс модели для перевода (если None, выбирается случайно)
         Returns:
             переведенный текст или исходный текст в случае ошибки
         """
         if not self.api_key:
             return text
         
-        # Если индекс модели не указан, выбираем случайно
-        if model_index is None:
-            model_index = self.get_random_model_index()
-        elif model_index >= len(self.models):
-            model_index = 0
-        
+        # Автоматически выбираем модель для перевода
+        model_index = self.get_available_model_index()
         model_name, model_id = self.models[model_index]
         
         # Формируем промпт для перевода
@@ -128,7 +192,14 @@ class TextSummarizer:
             prompt = "Переведи следующий текст на русский язык, сохранив смысл и стиль:"
         
         messages = [
-            {"role": "system", "content": "Ты - профессиональный переводчик. Переводи текст на русский язык, сохраняя смысл, стиль и структуру."},
+            {"role": "system", "content": """Ты - профессиональный переводчик. 
+
+**Требования к переводу:**
+• Переводи текст на русский язык
+• Сохраняй смысл, стиль и структуру
+• Сохраняй форматирование (абзацы, **жирный текст**, списки)
+• Адаптируй под русский язык, но сохраняй оригинальный стиль
+• Используй правильную русскую пунктуацию"""},
             {"role": "user", "content": f"{prompt}\n\n{text}"}
         ]
         
@@ -206,7 +277,27 @@ class TextSummarizer:
                 
                 response.raise_for_status()
                 result = response.json()
-                return result["choices"][0]["message"]["content"]
+                
+                # Получаем основной контент
+                content = result["choices"][0]["message"]["content"]
+                
+                # Получаем дополнительную информацию
+                usage = result.get("usage", {})
+                model_info = result.get("model", model_id)
+                
+                # Сохраняем дополнительную информацию для статистики
+                if not hasattr(self, '_last_api_info'):
+                    self._last_api_info = {}
+                
+                self._last_api_info = {
+                    "model_used": model_info,
+                    "prompt_tokens": usage.get("prompt_tokens", 0),
+                    "completion_tokens": usage.get("completion_tokens", 0),
+                    "total_tokens": usage.get("total_tokens", 0),
+                    "finish_reason": result["choices"][0].get("finish_reason", "unknown")
+                }
+                
+                return content
                 
             except Exception as e:
                 if hasattr(e, 'response') and getattr(e.response, 'status_code', None) == 429:
@@ -219,14 +310,14 @@ class TextSummarizer:
         
         return None
     
-    async def summarize_text(self, text: str, model_index: int = None, custom_prompt: str = None) -> Tuple[str, dict]:
+    async def summarize_text(self, text: str, custom_prompt: str = None, forced_model_index: int = None) -> Tuple[str, dict]:
         """
-        Суммаризирует текст по частям, затем создает итоговую суммаризацию
+        Суммаризирует текст по частям с автоматическим выбором модели
         
         Args:
             text: текст для суммаризации
-            model_index: индекс модели (если None, выбирается случайно)
             custom_prompt: пользовательский промпт
+            forced_model_index: принудительный индекс модели (для retry механизма)
         
         Returns:
             Tuple[str, dict]: (итоговая суммаризация, статистика)
@@ -236,14 +327,23 @@ class TextSummarizer:
             self.log_summarization_result(False, "none", len(text), 0, 0, error_msg)
             return error_msg, {}
         
-        # Если индекс модели не указан, выбираем случайно
-        if model_index is None:
-            model_index = self.get_random_model_index()
-        elif model_index >= len(self.models):
-            model_index = 0
+        # Выбираем модель: либо принудительно, либо автоматически
+        if forced_model_index is not None:
+            model_index = forced_model_index
+        else:
+            model_index = self.get_available_model_index()
         
         model_name, model_id = self.models[model_index]
-        prompt = custom_prompt or "Кратко изложи основные мысли этого фрагмента текста."
+        
+        prompt = custom_prompt or (
+            "Ты — эксперт по созданию кратких и информативных суммаризаций.\n"
+            "Требования к формату (Markdown):\n"
+            "• Разбивай мыслительные блоки на абзацы и разделяй абзацы пустой строкой.\n"
+            "• Выделяй ключевые понятия **жирным**.\n"
+            "• Используй маркированные списки там, где уместно.\n"
+            "• Допускается использовать уместные эмодзи в заголовках/маркерах (не злоупотребляй).\n"
+            "• Пиши по-русски, соблюдая пунктуацию."
+        )
         
         # Определяем язык исходного текста
         source_language = self.detect_language(text)
@@ -259,7 +359,14 @@ class TextSummarizer:
         # Если текст короткий - обрабатываем сразу
         if len(chunks) == 1 and len(text) < 2000:
             messages = [
-                {"role": "system", "content": "Создай краткую и содержательную суммаризацию текста."},
+                {
+                    "role": "system",
+                    "content": (
+                        "Ты — эксперт по созданию кратких и информативных суммаризаций. "
+                        "Строго соблюдай Markdown-оформление: абзацы с пустыми строками, **жирные** ключи, списки; "
+                        "уместные эмодзи разрешены."
+                    )
+                },
                 {"role": "user", "content": text}
             ]
             result = await self._make_request(model_id, messages)
@@ -273,6 +380,10 @@ class TextSummarizer:
                     "summary_length": len(result),
                     "source_language": source_language
                 }
+                
+                # Добавляем дополнительную информацию от API
+                if hasattr(self, '_last_api_info'):
+                    stats.update(self._last_api_info)
                 self.log_summarization_result(True, model_name, len(text), len(result), 1)
                 return result, stats
             else:
@@ -314,15 +425,15 @@ class TextSummarizer:
             return error_msg, {}
         
         # Создаем итоговую суммаризацию
-        final_prompt = "Создай единую связную суммаризацию на основе этих фрагментов:"
+        final_prompt = (
+            "Создай единую связную суммаризацию на основе этих фрагментов. "
+            "Строго оформи в Markdown: абзацы разделяй пустой строкой, выделяй **ключевые понятия**, "
+            "используй маркированные списки там, где это улучшает читабельность, допускай уместные эмодзи."
+        )
         combined_text = "\n\n".join(chunk_summaries)
         
-        final_messages = [
-            {"role": "system", "content": final_prompt},
-            {"role": "user", "content": combined_text}
-        ]
-        
-        final_summary = await self._make_request(model_id, final_messages)
+        # Улучшенная итоговая суммаризация с retry механизмом
+        final_summary = await self._create_final_summary_with_retry(model_id, combined_text, final_prompt)
         
         if final_summary and not final_summary.startswith("❌"):
             # Успешная итоговая суммаризация
@@ -334,22 +445,188 @@ class TextSummarizer:
                 "processed_chunks": successful_chunks,
                 "source_language": source_language
             }
+            
+            # Добавляем дополнительную информацию от API
+            if hasattr(self, '_last_api_info'):
+                stats.update(self._last_api_info)
             self.log_summarization_result(True, model_name, len(text), len(final_summary), len(chunks))
             return final_summary, stats
         else:
-            # Неуспешная итоговая суммаризация
+            # Неуспешная итоговая суммаризация - возвращаем промежуточные результаты
             error_msg = final_summary or "❌ Не удалось создать итоговую суммаризацию"
-            stats = {
-                "model": model_name,
-                "chunks": len(chunks),
-                "original_length": len(text),
-                "summary_length": 0,
-                "processed_chunks": successful_chunks,
-                "source_language": source_language
-            }
-            self.log_summarization_result(False, model_name, len(text), 0, len(chunks), error_msg)
-            return error_msg, stats
+            
+            # Fallback: возвращаем промежуточные результаты
+            if chunk_summaries:
+                fallback_summary = self._create_fallback_summary(chunk_summaries)
+                warning_msg = f"⚠️ Итоговая суммаризация не удалась. Возвращаю промежуточные результаты:\n\n{fallback_summary}"
+                
+                stats = {
+                    "model": model_name,
+                    "chunks": len(chunks),
+                    "original_length": len(text),
+                    "summary_length": len(fallback_summary),
+                    "processed_chunks": successful_chunks,
+                    "source_language": source_language,
+                    "fallback_used": True,
+                    "final_summary_failed": True
+                }
+                
+                if hasattr(self, '_last_api_info'):
+                    stats.update(self._last_api_info)
+                
+                self.log_summarization_result(False, model_name, len(text), len(fallback_summary), len(chunks), error_msg)
+                return warning_msg, stats
+            else:
+                # Полный провал
+                stats = {
+                    "model": model_name,
+                    "chunks": len(chunks),
+                    "original_length": len(text),
+                    "summary_length": 0,
+                    "processed_chunks": successful_chunks,
+                    "source_language": source_language
+                }
+                self.log_summarization_result(False, model_name, len(text), 0, len(chunks), error_msg)
+                return error_msg, stats
+    
+    async def summarize_with_retry(self, text: str, custom_prompt: str = None, max_retries: int = 3) -> Tuple[str, dict, bool]:
+        """
+        Суммаризирует текст с возможностью повторной попытки при неудовлетворительном результате
+        
+        Args:
+            text: текст для суммаризации
+            custom_prompt: пользовательский промпт
+            max_retries: максимальное количество попыток с разными моделями
+        
+        Returns:
+            Tuple[str, dict, bool]: (суммаризация, статистика, успешность)
+        """
+        used_models = []
+        last_error = None
+        
+        for attempt in range(max_retries):
+            # Выбираем модель, избегая уже использованных
+            model_index = self.get_available_model_index()
+            model_name, model_id = self.models[model_index]
+            used_models.append(model_name)
+            
+            summarization_logger.info(f"🔄 Попытка {attempt + 1}/{max_retries} с моделью: {model_name}")
+            
+            try:
+                summary, stats = await self.summarize_text(text, custom_prompt, model_index)
+                success = not summary.startswith("❌")
+                
+                if success:
+                    summarization_logger.info(f"✅ Суммаризация успешна с моделью {model_name} на попытке {attempt + 1}")
+                    return summary, stats, True
+                else:
+                    last_error = summary
+                    summarization_logger.warning(f"⚠️ Попытка {attempt + 1} с моделью {model_name} не удалась: {summary}")
+                    
+            except Exception as e:
+                last_error = f"Ошибка: {str(e)}"
+                summarization_logger.error(f"❌ Исключение при попытке {attempt + 1} с моделью {model_name}: {e}")
+            
+            # Небольшая пауза между попытками
+            if attempt < max_retries - 1:
+                await asyncio.sleep(2)
+        
+        # Все попытки исчерпаны
+        error_msg = f"❌ Все {max_retries} попытки суммаризации не удались. Использованные модели: {', '.join(used_models)}. Последняя ошибка: {last_error}"
+        summarization_logger.error(error_msg)
+        
+        # Возвращаем пустую статистику при неудаче
+        failed_stats = {
+            "model": "multiple_attempts",
+            "chunks": 0,
+            "original_length": len(text),
+            "summary_length": 0,
+            "used_models": used_models,
+            "last_error": last_error
+        }
+        
+        return error_msg, failed_stats, False
+    
+    async def _create_final_summary_with_retry(self, model_id: str, combined_text: str, prompt: str, max_retries: int = 3) -> str:
+        """
+        Создает итоговую суммаризацию с retry механизмом
+        
+        Args:
+            model_id: ID модели для использования
+            combined_text: объединенный текст всех частей
+            prompt: промпт для итоговой суммаризации
+            max_retries: максимальное количество попыток
+            
+        Returns:
+            итоговая суммаризация или сообщение об ошибке
+        """
+        for attempt in range(1, max_retries + 1):
+            try:
+                messages = [
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": combined_text}
+                ]
+                
+                result = await self._make_request(model_id, messages)
+                
+                if result and not result.startswith("❌"):
+                    return result
+                else:
+                    summarization_logger.warning(f"⚠️ Попытка {attempt}/{max_retries} итоговой суммаризации не удалась: {result}")
+                    
+            except Exception as e:
+                summarization_logger.error(f"❌ Исключение при попытке {attempt}/{max_retries} итоговой суммаризации: {e}")
+            
+            # Пауза между попытками
+            if attempt < max_retries:
+                await asyncio.sleep(self.retry_delay * attempt)  # Увеличиваем паузу с каждой попыткой
+        
+        return "❌ Не удалось создать итоговую суммаризацию после всех попыток"
+    
+    def _create_fallback_summary(self, chunk_summaries: List[str]) -> str:
+        """
+        Создает fallback суммаризацию из промежуточных результатов
+        
+        Args:
+            chunk_summaries: список суммаризаций частей
+            
+        Returns:
+            fallback суммаризация
+        """
+        if not chunk_summaries:
+            return "❌ Нет промежуточных результатов для создания fallback суммаризации"
+        
+        # Объединяем промежуточные результаты с разделителями
+        fallback_parts = []
+        for i, summary in enumerate(chunk_summaries, 1):
+            fallback_parts.append(f"**Часть {i}:**\n{summary}")
+        
+        fallback_text = "\n\n---\n\n".join(fallback_parts)
+        
+        # Добавляем заголовок
+        header = f"⚠️ **ПРОМЕЖУТОЧНЫЕ РЕЗУЛЬТАТЫ**\n\n*Итоговая суммаризация не удалась, но вот что получилось по частям:*\n\n"
+        
+        return header + fallback_text
+    
+    async def summarize_with_feedback(self, text: str, custom_prompt: str = None) -> Tuple[str, dict, bool]:
+        """
+        Суммаризирует текст и возвращает результат для запроса обратной связи
+        
+        Args:
+            text: текст для суммаризации
+            custom_prompt: пользовательский промпт
+        
+        Returns:
+            Tuple[str, dict, bool]: (суммаризация, статистика, успешность)
+        """
+        summary, stats = await self.summarize_text(text, custom_prompt)
+        success = not summary.startswith("❌")
+        return summary, stats, success
     
     def get_available_models(self) -> List[str]:
         """Возвращает список доступных моделей"""
-        return [name for name, _ in self.models] 
+        return [name for name, _ in self.models]
+    
+    def get_model_usage_stats(self) -> Dict[str, int]:
+        """Возвращает статистику использования моделей в текущей сессии"""
+        return {self.models[i][0]: 1 for i in self.used_models} 
